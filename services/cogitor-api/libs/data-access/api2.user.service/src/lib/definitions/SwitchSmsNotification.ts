@@ -1,0 +1,2 @@
+/** SwitchSmsNotification */
+export interface SwitchSmsNotification {}

@@ -1,0 +1,36 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node.js
+node_modules/
+dist/
+build/
+
+# Секреты и конфиги
+.env
+.env.local
+*.key
+*.pem
+
+# Данные
+data/
+uploads/
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Логи
+*.log
+logs/
+
+# Docker
+docker/data/

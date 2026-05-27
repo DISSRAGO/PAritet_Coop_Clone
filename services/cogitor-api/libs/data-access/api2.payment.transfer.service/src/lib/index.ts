@@ -1,0 +1,16 @@
+export { Pay } from './definitions/Pay';
+export { PayResponse } from './definitions/PayResponse';
+export { Status } from './definitions/Status';
+export { ContainerLinkList } from './definitions/ContainerLinkList';
+export { ContainerLink } from './definitions/ContainerLink';
+export { Container } from './definitions/Container';
+export { ParamList } from './definitions/ParamList';
+export { ControlList } from './definitions/ControlList';
+export { Control } from './definitions/Control';
+export { AttrList } from './definitions/AttrList';
+export { ChildrenList } from './definitions/ChildrenList';
+export { RefreshWsdl } from './definitions/RefreshWsdl';
+export { RefreshWsdlResponse } from './definitions/RefreshWsdlResponse';
+export { createClientAsync, Api2PaymentTransferServiceClient } from './client';
+export { PaymentTransfer } from './services/PaymentTransfer';
+export { PaymentTransferSoap } from './ports/PaymentTransferSoap';

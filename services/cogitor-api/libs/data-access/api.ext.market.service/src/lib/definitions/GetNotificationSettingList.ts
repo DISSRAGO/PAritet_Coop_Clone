@@ -1,0 +1,2 @@
+/** GetNotificationSettingList */
+export interface GetNotificationSettingList {}

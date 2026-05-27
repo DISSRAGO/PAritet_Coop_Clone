@@ -1,0 +1,2 @@
+/** ChangeGoodHiddenResponse */
+export interface ChangeGoodHiddenResponse {}

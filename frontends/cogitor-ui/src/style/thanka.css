@@ -1,0 +1,1109 @@
+/* играться со шрифтами будем позже */
+body {
+    font-size: 14px !important;
+    color: black !important;
+    line-height: 1.1em !important;
+    background-color: #f5f5f5;
+}
+
+textarea {
+    resize: none !important;
+}
+
+.bigLink {
+    position: absolute;
+    left: 10px;
+    top: calc((64px - 20px)/2);
+    font-size: 20px;
+    font-weight: 500;
+    z-index: 1000;
+}
+
+.ant-layout-header {
+    padding: 10px !important;
+}
+
+.ant-layout-content content {
+    padding: 0px !important;
+}
+
+a {
+    color: black;
+}
+
+button:not(.ant-pagination-item-link) {
+    background: #ffffff; 
+    color: black !important;
+    padding: 5px 15px !important;
+    margin-right: 10px !important;
+    border-style: none;
+    box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);
+    cursor: pointer;
+}
+
+button:disabled {
+    background: #aaaaaa; 
+    color: black !important;
+    padding: 5px 15px !important;
+    margin-right: 10px !important;
+    border-style: none;
+   /* box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);*/
+    cursor: pointer;
+}
+
+.editorHeader {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.editorButtons {
+    text-align: center;
+}
+
+.button-menu {
+    text-align: center;
+    margin: 10px auto;
+}
+
+/*.button-menu button {
+    margin: 10px 0 !important;
+}*/
+
+.button-group input {
+    display: inline;
+    margin: 0 10px !important;
+    padding: 0 5px !important;
+}
+
+main {
+    min-height: calc(100vh - 100px - 64px) !important;
+    padding: 0 !important;
+}
+
+a:hover {
+    color:dodgerblue !important;
+}
+
+h2, h3, h4 {
+    margin-bottom: 5px;
+}
+
+p {
+    margin-bottom: 7px !important;
+}
+
+footer {
+    background-color: white !important;
+}
+
+form {
+    display: inline;
+    margin-right: 5px;
+}
+
+#annotation {
+    margin-bottom: 20px;
+}
+
+.seeAllButt {
+    display: inline-block;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-left: 0px !important;
+}
+
+main, #root{
+    background-color: #f5f5f5;
+}
+
+#mainThanka {
+    max-width: calc(14*65px);
+    margin: auto;
+    text-align: left;
+}
+
+.jodit-toolbar__box button {
+    box-shadow: none !important;
+    background: #fafafa !important;
+}
+
+.cogicontainer img {
+    margin: 5px;
+}
+
+.cogicontainer input:not([type="image"]):not([type="file"]):not([type="radio"]) {
+    border-style: none;
+    box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);
+    margin-bottom: 5px !important;
+}
+
+.cogicontainer select {
+    border-style: none;
+    box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);
+    margin-bottom: 5px !important;
+}
+
+.cogicontainer select:disabled {
+    border-style: none;
+    box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);
+    margin-bottom: 5px !important;
+    background-color: rgba(200, 200, 200, 0.5);
+}
+
+.cogicontainer button:not(.ant-pagination-item-link)  {
+    display: inline;
+    margin-right: 5px;
+    margin-top: 10px;
+    margin-bottom: 10px;
+    padding: 5px;
+    border-style: none;
+    box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);
+}
+
+.ant-pagination {
+    text-align: center;
+}
+
+.thankadata {
+    width: 90%;
+    margin: 10 auto;
+}
+
+/*.cogicontainer */
+input[type='image'] {
+    width: 30px;
+    margin: 5px 10px;
+    padding: 5px;
+}
+
+#add_article {
+    display: inline;
+    padding: 0;
+    margin: 5px 10px 0px 10px;
+    width: 20px;
+}
+
+.cogicontainer {
+    width: 100%;
+    margin: auto;
+    padding: 10px;
+    height: calc(100%-20px);
+}
+
+#cogobj_buttons {
+    text-align: right;
+}
+
+.interface_buttons {
+    display: none;
+}
+
+
+#thumbnail {
+    margin-top: 10px;
+    min-width: 150px;
+    min-height: 150px;
+}
+
+.circleSector {
+    width: 50px;
+}
+
+.personal p {
+    margin: 5px;
+}
+
+.personal {
+    margin: 10px 10px 10px 0px;
+}
+
+.personal h3 {
+    margin-top: 10px;
+}
+
+.contentList {
+    display: block;
+    overflow: auto;
+    padding: 0px;
+    color: black;
+}
+
+.contentList h4 {
+    margin-bottom: 10px !important;
+}
+
+.contentList a {
+    color: black;
+}
+
+.contentList table {
+    text-align: left !important;
+    margin: 10px auto;
+    width: 100%;
+}
+
+.pic {
+    width: 60px;
+}
+
+.eye {
+   width: 20px; 
+}
+
+.contentList td {
+    min-width: 15px;
+}
+
+#mainThanka .thankaPic {
+    width: 50px;
+}
+
+.comment {
+    background-color: #fcfcfc;
+    border-radius: 5px;
+    box-shadow: 0 0 3px rgba(143, 143, 143, 0.5);
+    margin: 10px 0px;
+    padding: 10px;
+}
+
+.commentStory {
+    background-color: #f5f5f5;
+    border-radius: 5px;
+    box-shadow: 0 0 3px rgba(143, 143, 143, 0.5);
+    margin: 10px auto;
+    padding: 10px;
+}
+
+.commentStory img {
+    margin: 10px;
+}
+
+.comment button {
+    margin-top: 5px;
+    display: inline-block; 
+}
+
+.comment input {
+    margin-top: 5px;
+    display: inline-block !important; 
+}
+
+.comment p {
+    margin-left: 10px;
+}
+
+.version {
+    background-color: #f0f0f0;
+    padding: 10px;
+}
+
+.versionmessage {
+    font-style: italic;
+}
+
+#childName {
+    margin-bottom: 10px;
+}
+
+.childcomment {
+    margin-left: 20px;
+    background-color: #ececec;
+    border-radius: 5px;
+    box-shadow: 0 0 3px rgba(143, 143, 143, 0.5);
+    padding: 10px;
+    margin-bottom: 5px;
+}
+
+.themeName {
+    display: inline-block;
+    margin: 5px;
+    margin-right: 10px;
+    text-align: center;
+}
+
+.themeName img {
+    width: 1em;
+    margin-left: 2px;
+}
+
+.themeName a {
+    font-weight: bold;
+    margin: 0px;
+}
+
+.themeName p {
+    font-weight: normal;
+    margin: 0px;
+}
+
+.lil-container {
+    width: 95%;
+    margin: 10px auto;
+    border-radius: 8px;
+    background-color: #ffffff;
+    padding: 10px !important;
+}
+
+.lil-container button {
+    display: block;
+}
+
+.lil-container text {
+    display: block;
+    margin: 5px;
+}
+
+.lil-container p {
+    display: block;
+    margin: 15px 5px;
+    font-weight: bold;
+}
+
+.lil-container table p {
+    font-weight: normal;
+}
+
+.lil-container input[type='checkbox'] {
+    margin-top: 5px;
+}
+
+.lil-container input[type="radio"] {
+    display: inline;
+    width: 10px;
+    margin: 3px 10px;
+    box-shadow: none !important;
+}
+
+.privacy-label {
+    margin-top: 5px !important;
+    font-weight: 400 !important;
+}
+
+.subscribe {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+.subscribeAngles {
+    display: inline !important;
+    margin: 0 10px !important;
+    padding: 0 !important;
+    width: 15px !important;
+}
+
+.subscribeService span {
+    margin: 10px 5px;
+    padding: 0px 5px 15px 0px;
+}
+
+.followers {
+    margin-top: 10px !important;
+}
+
+.mainThanka iframe {
+    width: 100%;
+}
+
+input, select {
+    display: block;
+    /*place-items: center;*/
+    margin: 5px;
+    padding: 5px;
+    font-size: 10pt;
+    width: 250px;
+    cursor: pointer;
+}
+
+input[type='checkbox'] {
+    width: 15px;
+}
+
+#loadbutton {
+    display: block;
+}
+
+#elements {
+    display: block;
+}
+
+#elements input {
+    place-items: center;
+    margin: 2px 2px;
+    padding: 5px;
+    font-size: 12pt;
+    width: 55px;
+}
+
+.tableButton {
+    display: inline;
+}
+
+.sortButtons {
+    text-align: center;
+    width: 100%;
+}
+
+.sortButtons button {
+    margin: 5px !important;
+}
+
+.leftButtons {
+    /*background-color: white;*/
+    text-align: center;
+    width: 30%;
+    position: absolute;
+    top: 19px;
+    left: 35%;
+    margin: auto;
+}
+
+.leftButtons li {
+    width: 20%;
+    padding: 0px 5px !important;
+    margin: auto;
+    text-align: center;
+}
+
+.leftButtons ul {
+    margin: auto;
+    text-align: center;
+}
+
+.innerEditor input {
+    margin-top: 5px !important;
+}
+
+#systemMessage {
+    background-color: #f0fff0;
+    text-align: center;
+    margin: 10px auto;
+    padding: 5px;
+    border-radius: 8px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5)
+}
+
+#systemMessage input {
+    display: inline !important;
+}
+
+#systemMessage table {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#thanka-left {
+    margin: auto;
+    height: fit-content;
+    /*min-height: 300px;*/
+    max-width: 100%;
+    padding: 0px;
+
+}
+
+.error button {
+    display: block;
+    margin: 10px auto !important;
+}
+
+#thanka-right {
+    width: 100%;
+    text-align: justify !important;
+}
+
+#thankaname {
+    display: block;
+    text-align: center;
+    margin: 10px auto 5px auto;
+}
+
+#hideInterface {
+    display: none;
+}
+
+/*.navLinks a{
+    display: block;
+    height: 1.5em;
+}*/
+
+.navLinks a {
+    margin-right: 10px;
+}
+
+.table {
+    overflow: auto;
+    table-layout: auto;
+    background-color: #F5F5F5;
+    text-align: center;
+    border-style: none;
+    padding: 5px;
+    max-width: 480px;
+    width: 100%;
+    margin: 10px auto;
+}
+
+.table tbody {
+    max-width: 480px;
+    min-height: 20px;
+    margin: auto;
+}
+
+.table tr td, th {
+    border: 3px solid rgb(255, 255, 255);
+    padding: 3px;
+    margin: auto;
+    text-align: center;
+}
+
+.table input {
+    margin: auto !important;
+}
+
+.table th {
+    font-weight: 500;
+}
+
+.table button {
+    margin: 2px !important;
+    padding: 2px;
+}
+
+.lil-container img {
+    margin: 0;
+}
+
+.storyList td {
+    border: 3px solid rgb(255, 255, 255);
+    padding: 3px;
+    margin: auto;
+}
+
+.RightWork .storyList {
+    width: 40%;
+}
+
+.tableAnnotation {
+    vertical-align: top !important;
+}
+
+.tableAnnotation p {
+    margin: 0px !important;
+}
+
+.tableCommentEditor {
+    text-align: center;
+}
+
+.tableCommentEditor .jodit-react-container {
+    text-align: left !important;
+}
+
+.tableName {
+    height: 2em !important;
+}
+
+.error {
+    text-align: center !important;
+    margin: auto;
+}
+
+.thankameta {
+    width: 100%;
+    margin-top: 5px;
+}
+
+.thankameta p {
+    margin: 5px;
+}
+
+.thankameta a {
+    color: rgba(0, 0, 0, 0.65);
+    font-weight: bold;
+    margin: 5px;
+}
+
+.thankaPicInline {
+    position: absolute;
+}
+
+.commentType input[type="radio"] {
+    display: inline;
+    width: 10px;
+    margin-left: 10px;
+    box-shadow: none !important;
+}
+
+.leftMenu {
+    float: left;
+    width: 20%;    
+    position: fixed;
+}
+
+.RightWork {
+    width: 80%;
+    float: left;
+    margin-left: 22%;
+    position: relative;
+}
+
+.RightWork .commentStory{
+    margin: 10px;
+    width: 40%;
+}
+
+.menuItem {
+    margin: 10px 0px;
+    box-shadow: none;
+    width: 100%;
+}
+
+.menuItem img{
+    width: 30px;
+    padding-right: 10px;
+}
+
+.systemMessageText {
+    width: 500px;
+}
+
+.adminHelp {
+    position: absolute;
+    left: 10px;
+    top: 150px;
+}
+.adminHelp input{
+    margin: 0%;
+    padding: 0%;
+    width: 20px;
+}
+
+.widgetGetter {
+    position: absolute;
+    left: 10px;
+    top: 180px;
+}
+.widgetGetter input{
+    margin: 0%;
+    padding: 0%;
+    height: 23px;
+    width: 20px;
+}
+
+#messageForAdmin {
+    position: absolute;
+    width: 90%;
+}
+
+#messageForAdmin .jodit-workplace {
+    min-height: 101px !important;
+    height: 101px !important;
+}
+
+
+
+.clock {
+    display: inline;
+    width: 50px;
+}
+
+.popupPreview {
+    z-index: 1;
+    position: fixed !important;
+    left: 55%;
+    top: 15%;
+    width: 40%;
+    float: right;
+}
+
+.requestEditor label {
+    display: inline !important;
+    margin-right: 10px;
+    margin-left: 2px;
+}
+
+.requestEditor input:not([type='text']) {
+    box-shadow: none !important;
+}
+
+.requestEditor input {
+    display: inline !important;
+}
+
+.requestEditor input[type='radio'] {
+    width: 10px;
+}
+
+.requestEditor input[type='date'], .requestEditor input[type='number']  {
+    width: 100px;
+}
+
+.requestEditor p > label {
+    font-weight: normal;
+}
+
+.requestTable{
+    width: 100%;
+    margin: 10px auto;
+    overflow: scroll;
+}
+
+.requestTable td {
+    border: 3px solid rgb(255, 255, 255);
+    padding: 3px;
+    margin: auto;
+    text-align: center;
+}
+
+.big_input {
+    width: 500px !important;
+}
+
+.locationPart select {
+    margin-top: 5px !important;
+}
+
+#mindmap {
+    background-color: #ffffff;
+    box-shadow: 0 0 5px rgba(143, 143, 143, 0.5);
+    margin-top: 10px;
+}
+
+.konvajs-content {
+    width: 100%;
+}
+
+.annotationLayer {
+    position: absolute;
+}
+
+.canvas {
+    position: absolute;
+    width: 250px;
+    /*left: calc((100% - 250px)/2);*/
+}
+
+.canvasLite {
+    position: absolute;
+    width: 320px;
+    /*left: calc((100% - 250px)/2);*/
+}
+
+#graphicInterface {
+    position: relative;
+    height: 250px;
+    width: 250px;
+    margin: auto;
+   /* left: calc((100% - 250px)/2);*/
+}
+
+#graphicInterfaceLite {
+    position: relative;
+    height: 320px;
+    width: 320px;
+    float: left;
+}
+
+#thanka-rightLite {
+    min-height: fit-content;
+    margin: auto;
+    width: calc(100% - 330px);
+    padding: 10px;
+    /*margin: 510px 0 0 0;*/
+    overflow: auto;
+    min-height: 330px;
+
+}
+
+.editorErrorButton {
+    position: relative;
+    display: block !important;
+    top: 50px !important;
+}
+
+.labelIcons input {
+    display: inline !important;
+    padding: 0;
+    width: 20px;
+    margin: 0 5px;
+}
+
+.leftButtons svg {
+    height: 30px !important;
+}
+
+.productImg {
+    max-width: 300px;
+    max-height: 300px;
+}
+
+.productImg {
+    max-width: 300px;
+    max-height: 300px;
+}
+
+.productImgList {
+    max-width: 150px;
+    max-height: 150px;
+}
+
+.siteHeader {
+    padding: 15px;
+}
+dialog {
+    border: none !important;
+}
+
+dialog button {
+    margin: 10px;
+}
+
+dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.parentAuthorLinks {
+    /*float: right;*/
+    display: inline !important;
+}
+
+@media (min-width: 320px) {
+    .canvas {
+        position: absolute;
+        width: 320px;
+       /* left: calc((100% - 320px)/2);*/
+    }
+    #graphicInterface {
+        height: 320px;
+        width: 320px;
+        /*left: calc((100% - 320px)/2);*/
+    }
+}
+
+@media (min-width: 768px) {
+
+    .leftButtons {
+        width: 30%;
+        left: 35%;
+    }
+
+    .leftButtons li {
+        width: 20%;
+    }
+    .adminHelp {
+        position: fixed;
+        left: 20px;
+    }
+
+    .widgetGetter {
+        position: fixed;
+        left: 20px;
+    }
+
+    .interface_buttons {
+        display: block;
+        text-align: right;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+    }
+    
+    .interface_buttons a {
+        margin-left: 10px;
+        color: rgb(12, 52, 92) !important;
+    }
+    
+    .navLinks {
+        display: inline;
+    }
+}
+
+@media (min-width: 980px) {
+
+    #graphicInterface {
+        height: 480px;
+        width: 480px;
+    }
+    
+    .cogicontainer .errormessage{
+        position: relative;
+        top: 40px;
+    }
+
+    /*.leftButtons {
+        background-color: rgba(256,256,256,0);
+        text-align: center;
+        width: 50%;
+        position: absolute;
+        margin: auto;
+        /*top: 20px;
+        left: 25%;
+    }*/
+
+    .locationPart {
+        display: inline-block;
+        width: 30%;
+    }
+
+    .locationPart select {
+        width: 200px !important;
+    }
+
+    #messageForAdmin {
+        position: absolute;
+        width: 40%;
+    }
+
+    .lil-container {
+        padding: 20px !important;
+        width: 80%;
+    }
+
+    input, select {
+        width: 300px;
+    }
+
+    .bigLink {
+        left: 100px;
+        font-size: 30px;
+        top: calc((64px - 24px)/2);
+    }
+
+    .canvas {
+      /*  left: 20px;*/
+        width: 480px;
+    }
+
+
+
+    #mainThanka .thankaPic {
+        width: 100px;
+    }
+    #thanka-left {
+        float: left;
+        min-height: 500px;
+        width: 500px;
+        padding: 10px;
+        overflow: auto;
+
+    }
+
+    .table {
+        overflow: auto;
+    }
+
+    #hideInterface {
+        display: block;
+        margin-right: 10px;
+        float: right;
+    }
+
+    .adminHelp {
+        width: 20px;
+        float: right;
+        left: 90%;
+        position: fixed;
+    }
+
+    .widgetGetter {
+        width: 20px;
+        float: right;
+        left: 90%;
+        position: fixed;
+    }
+
+    #thankaname h1, #thankaname h2, #thankaname h3, #thankaname h4, #thankaname h5, #thankaname h6 {
+        margin-bottom: 10px;
+        display: inline;
+        padding-bottom: 10px;
+    }
+
+    #thanka-right {
+        min-height: fit-content;
+        margin: auto;
+        width: calc(100% - 510px);
+        padding: 10px;
+        /*margin: 510px 0 0 0;*/
+        overflow: auto;
+
+    }
+
+    /*.leftButtons {
+        margin: auto;
+        text-align: center;
+        width: 50%;
+    }*/
+
+
+    #thankaname {
+        margin: 10 auto;
+        text-align: center;
+    }
+
+    .button-menu {
+        margin: 10 auto;
+        text-align: center;
+    }
+
+    .iconthumb {
+        position: absolute;
+        left: 50%;
+    }
+
+    .requestTable{
+        margin: 10px 0px;
+    }
+
+}
+
+.thankaLinkObject {
+    background: #C0C0C0;
+    padding: 10px;
+}
+
+@media (min-width: 1200px) {
+    /*.leftButtons {
+        margin: auto;
+        text-align: center;
+    }*/
+/*
+    .canvas {
+        left: calc(5% + 20px);
+    }
+*/
+    .cogicontainer {
+        width: 90%;
+        margin: auto;
+        padding: 10px;
+        border-radius: 8px;
+
+        /*min-height: 600px;*/
+    }
+    
+    .catalog {
+        display: inline;
+        width: 50%;
+        float: left;
+    }
+
+    #systemMessage {
+        width: 80%;
+    }
+}
+@media (min-width: 1700px) {
+
+    #mainThanka {
+        max-width: 100%;
+        margin: auto;
+        text-align: left;
+    }
+
+    .cogicontainer {
+        width: calc(480px + 14*65px);
+        padding: 10px;
+        border-radius: 8px;
+        min-height: 600px;
+    }
+    
+    #systemMessage {
+        width: 70%;
+    }
+}

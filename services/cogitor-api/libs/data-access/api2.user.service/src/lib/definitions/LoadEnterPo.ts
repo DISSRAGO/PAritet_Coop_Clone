@@ -1,0 +1,2 @@
+/** LoadEnterPO */
+export interface LoadEnterPo {}

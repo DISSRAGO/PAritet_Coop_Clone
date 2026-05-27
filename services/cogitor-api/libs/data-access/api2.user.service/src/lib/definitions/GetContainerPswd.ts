@@ -1,0 +1,2 @@
+/** GetContainerPswd */
+export interface GetContainerPswd {}

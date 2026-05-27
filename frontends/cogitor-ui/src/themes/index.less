@@ -1,0 +1,200 @@
+@import '~antd/lib/style/themes/default.less';
+@import '~antd/dist/antd.less';
+
+
+@primary-color: #0070cc;
+@success-color: #1e8e3e;
+@info-color: #f8f4f4;
+@warning-color: #ffc440;
+@error-color: #d93026;
+@processing-color: @primary-color;
+@text-color: fade(#000, 65%);
+@text-color-secondary: fade(#000, 45%);
+@border-color-base: #dedede;
+@border-color-split: #dedede;
+@layout-body-background: #fafafa;
+@layout-header-background: #0b0c0c;
+@font-size-base: 12px;
+@border-radius-base: 20px;
+@border-radius-sm: 0;
+@padding-lg: 10px;
+@outline-width: 0;
+@outline-color: #737373;
+@background-color-base: hsv(0, 0, 96%);
+@btn-default-bg: #fafafa;
+@btn-default-border: #dedede;
+@radio-button-bg: transparent;
+@radio-button-checked-bg: transparent;
+@form-item-margin-bottom: 16px;
+@input-height-lg: 36px;
+@input-hover-border-color: #737373;
+@progress-radius: 0;
+@table-header-bg: #fafafa;
+@table-row-hover-bg: #fafafa;
+@table-padding-vertical: 15px;
+@tabs-card-gutter: -1px;
+@tabs-card-tab-active-border-top: 2px solid @primary-color;
+@switch-color: @success-color;
+@breadcrumb-base-color: @text-color;
+@breadcrumb-last-item-color: @text-color-secondary;
+@slider-handle-border-width: 1px;
+@slider-handle-shadow: 1px 1px 4px 0 rgba(0,0,0,.13);
+@slider-track-background-color: @primary-color;
+@slider-track-background-color-hover: @primary-color;
+@slider-handle-color: #dedede;
+@slider-handle-color-hover: #dedede;
+@slider-handle-color-focus: #dedede;
+@slider-handle-color-focus-shadow: transparent;
+@slider-handle-color-tooltip-open: #ddd;
+@alert-success-border-color: #dff4e5;
+@alert-success-bg-color: #dff4e5;
+@alert-info-border-color: #e5f3ff;
+@alert-info-bg-color: #e5f3ff;
+@alert-warning-border-color: #fff7db;
+@alert-warning-bg-color: #fff7db;
+@alert-error-border-color: #fcebea;
+@alert-error-bg-color: #fcebea;
+
+
+body {
+  height: 100%;
+  width: 100%;
+  overflow-y: scroll;
+  background-color: #f8f8f8;
+}
+
+#root {
+  min-width: 100%;
+  min-height: 100%;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #e6e6e6;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.margin-right {
+  margin-right: 16px;
+}
+
+.ant-modal-title {
+  text-align: center;
+}
+
+
+:global {
+  .ant-breadcrumb {
+    & > span {
+      &:last-child {
+        color: #999;
+        font-weight: normal;
+      }
+    }
+  }
+
+  .ant-breadcrumb-link {
+    .anticon + span {
+      margin-left: 4px;
+    }
+  }
+
+  .ant-table {
+    .ant-table-thead > tr > th {
+      text-align: center;
+    }
+
+    .ant-table-tbody > tr > td {
+      text-align: center;
+    }
+
+    &.ant-table-small {
+      .ant-table-thead > tr > th {
+        background: #f7f7f7;
+      }
+
+      .ant-table-body > table {
+        padding: 0;
+      }
+    }
+    .ant-card {
+      border-radius: 0;
+      margin-bottom: 24px;
+      &:hover {
+        box-shadow: 4px 4px 40px rgba(0, 0, 0, 0.05);
+      }
+    }
+    .ant-card-body {
+      overflow-x: hidden;
+    }
+  }
+
+  .ant-table-pagination {
+    float: none !important;
+    display: table;
+    margin: 16px auto !important;
+  }
+
+  .ant-popover-inner {
+    border: none;
+    border-radius: 0;
+    box-shadow: 0 0 20px rgba(100, 100, 100, 0.2);
+  }
+
+  .ant-form-item-control {
+    vertical-align: middle;
+  }
+
+  .ant-modal-mask {
+    background-color: rgba(55, 55, 55, 0.2);
+  }
+
+  .ant-modal-content {
+    box-shadow: none;
+  }
+
+  .ant-select-dropdown-menu-item {
+    padding: 12px 16px !important;
+  }
+
+  a:focus {
+    text-decoration: none;
+  }
+
+  .ant-table-layout-fixed table {
+    table-layout: auto;
+  }
+}
+@media (min-width: 1600px) {
+  :global {
+    .ant-col-xl-48 {
+      width: 20%;
+    }
+
+    .ant-col-xl-96 {
+      width: 40%;
+    }
+  }
+}
+@media (max-width: 767px) {
+  :global {
+    .ant-pagination-item,
+    .ant-pagination-next,
+    .ant-pagination-options,
+    .ant-pagination-prev {
+      margin-bottom: 8px;
+    }
+
+    .ant-card {
+      .ant-card-head {
+        padding: 0 12px;
+      }
+
+      .ant-card-body {
+        padding: 12px;
+      }
+    }
+  }
+}

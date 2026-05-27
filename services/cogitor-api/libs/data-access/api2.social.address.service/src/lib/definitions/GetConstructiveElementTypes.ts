@@ -1,0 +1,2 @@
+/** GetConstructiveElementTypes */
+export interface GetConstructiveElementTypes {}

@@ -1,0 +1,7 @@
+fastapi[standard]
+sqlmodel
+psycopg2-binary
+PyJWT
+pillow
+bcrypt
+psycopg[binary]

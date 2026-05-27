@@ -1,0 +1,4 @@
+
+/** RefreshWSDL */
+export interface RefreshWsdl {
+}

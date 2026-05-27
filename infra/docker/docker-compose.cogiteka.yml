@@ -1,0 +1,53 @@
+services:
+  cogiteka-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cogiteka-api
+    working_dir: /app
+    environment:
+      COGI_PROJECT_DIR: /app
+      COGI_DATA_DIR: /app/data
+      COGI_STYLE_PATH: http://localhost:8000/data/styles/
+      COGI_PDF_PATH: http://localhost:8000/data/pdf/
+      COGI_SITE_NAVIGATOR_URL: http://localhost:3001/navigator/
+      COGI_START_THANKA_ID: "18352"
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    networks:
+      - shared
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+  cogiteka-ui:
+    build:
+      context: ./frontends/cogitor-ui
+      dockerfile: Dockerfile
+    container_name: cogiteka-ui
+    working_dir: /app
+    volumes:
+      - ./frontends/cogitor-ui:/app
+      - /app/node_modules
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      PORT: "3001"
+      HOST: "0.0.0.0"
+    ports:
+      - "3001:3001"
+    networks:
+      - shared
+    depends_on:
+      - cogiteka-api
+    restart: unless-stopped
+
+networks:
+  shared:
+    external: true
+    name: clone_shared

@@ -1,0 +1,2 @@
+/** GetRegisteredHouseList */
+export interface GetRegisteredHouseList {}

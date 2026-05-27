@@ -1,0 +1,2 @@
+/** GetUnitList */
+export interface GetUnitList {}

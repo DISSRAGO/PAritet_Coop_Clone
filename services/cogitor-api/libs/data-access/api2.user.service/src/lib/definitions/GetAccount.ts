@@ -1,0 +1,2 @@
+/** GetAccount */
+export interface GetAccount {}

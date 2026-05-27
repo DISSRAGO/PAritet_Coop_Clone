@@ -1,0 +1,2 @@
+/** GetCountHouse */
+export interface GetCountHouse {}

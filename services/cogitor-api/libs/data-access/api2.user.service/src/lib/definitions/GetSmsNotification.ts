@@ -1,0 +1,2 @@
+/** GetSmsNotification */
+export interface GetSmsNotification {}

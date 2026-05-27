@@ -1,0 +1,2 @@
+/** GetContainerAccessIP */
+export interface GetContainerAccessIp {}

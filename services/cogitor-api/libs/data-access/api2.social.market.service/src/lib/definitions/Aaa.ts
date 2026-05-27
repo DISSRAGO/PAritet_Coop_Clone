@@ -1,0 +1,4 @@
+
+/** aaa */
+export interface Aaa {
+}

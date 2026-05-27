@@ -1,0 +1,2 @@
+/** GetCategoryHierarchy */
+export interface GetCategoryHierarchy {}

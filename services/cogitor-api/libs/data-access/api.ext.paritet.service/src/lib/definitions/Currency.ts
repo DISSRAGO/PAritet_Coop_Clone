@@ -1,0 +1,13 @@
+/**
+ * CurrencyDto
+ * @targetNSAlias `s0`
+ * @targetNamespace `https://www.portmonet.ru`
+ */
+export interface Currency {
+  attributes: {
+    ClientId: string;
+    Id: string;
+    Name: string;
+    Type: string;
+  }
+}

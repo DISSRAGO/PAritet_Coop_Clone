@@ -1,0 +1,2 @@
+/** BeforeRegisterCredentials */
+export interface BeforeRegisterCredentials {}

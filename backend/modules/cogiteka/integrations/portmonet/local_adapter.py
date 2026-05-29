@@ -648,16 +648,28 @@ class LocalCogiAdapter:
     def _my_thanka_rows(self, login: str, only_roots: bool = False) -> list[dict]:
         """Список тханок пользователя для MyThankaList (исключая cabinet).
 
-        При only_roots=True возвращаем только корневые тханки (без parent_id),
-        используется как Children для кабинета.
+        При only_roots=True — возвращаем «первых потомков аватара» по канону
+        KOGI.Metody / PERVYI-RELIZ — это тханки, у которых parent_id = thanka_id кабинета.
+        Старые тханки без parent_id (созданные до канон-фикса) тоже выводятся в кабинете,
+        чтобы экран кабинета ничего не терял.
         """
         if not login:
             return []
         parent_filter = ""
         if only_roots:
-            parent_filter = (
-                " AND COALESCE(NULLIF(co.current_content->>'parent_id', ''), NULL) IS NULL"
-            )
+            cabinet_id = self._cabinet_id_for(login=login)
+            if cabinet_id:
+                parent_filter = (
+                    " AND ("
+                    "  COALESCE(NULLIF(co.current_content->>'parent_id', ''), NULL) IS NULL"
+                    f"  OR co.current_content->>'parent_id' = '{cabinet_id}'"
+                    " )"
+                )
+            else:
+                # fallback — кабинета нет (свежий пользователь), берём безparentы
+                parent_filter = (
+                    " AND COALESCE(NULLIF(co.current_content->>'parent_id', ''), NULL) IS NULL"
+                )
         rows = _q(
             f"""
             SELECT t.thanka_id::text AS "ID",

@@ -844,6 +844,7 @@ function Canvas(props) {
         console.log("CLICK FIRED " + JSON.stringify({
             thankaId: data?.Id,
             mousePosition,
+            selectedSector,
             sectorAtPos: (mousePosition.circle !== false && mousePosition.sector !== false)
                 ? sectorsArr?.thankaArray?.[mousePosition.circle]?.[mousePosition.sector]
                 : null,
@@ -870,12 +871,19 @@ function Canvas(props) {
             && data.Elements[mousePosition.elem]) {
             address = '/navigator/' + data.Elements[mousePosition.elem].ID;
         }
-        if (mousePosition.circle !== false && mousePosition.sector !== false) {
-            let i = mousePosition.circle;
-            let j = mousePosition.sector;
-            if (sectorsArr.thankaArray[i][j].Id == 0 && access == true && !isLite) window.location.assign("/create");
-            else if (sectorsArr.thankaArray[i][j].Id !== 0 && sectorsArr.thankaArray[i][j].Id !== -1) {
-                address = "/navigator/" + sectorsArr.thankaArray[i][j].URL;
+        // mousePosition может успеть сброситься на elem между mouseMove и onClick
+        // (тонкие сектора, курсор выскакивает за radius[c]). Поэтому
+        // используем selectedSector как fallback — он хранит последний
+        // сектор над которым был ховер.
+        let ci = mousePosition.circle !== false ? mousePosition.circle : selectedSector.circle;
+        let si = mousePosition.sector !== false ? mousePosition.sector : selectedSector.sector;
+        if (ci !== false && si !== false
+            && sectorsArr.thankaArray[ci]
+            && sectorsArr.thankaArray[ci][si]) {
+            const cell = sectorsArr.thankaArray[ci][si];
+            if (cell.Id == 0 && access == true && !isLite) window.location.assign("/create");
+            else if (cell.Id !== 0 && cell.Id !== -1) {
+                address = "/navigator/" + cell.URL;
             }
         }
         console.log("CLICK FINAL ADDRESS " + JSON.stringify({ address, isLite, isSite }));
@@ -899,6 +907,7 @@ function Canvas(props) {
         ctx.clearRect(0, 0, size.w, size.h)
         ctxT.clearRect(0, 0, size.w + 10, size.h)
         setMouse({ circle: false, sector: false, center: false, elem: false })
+        setSector({ circle: false, sector: false })
     }
 
     return (

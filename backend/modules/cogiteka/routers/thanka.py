@@ -581,7 +581,8 @@ def build_thanka_stub(
 
     return result
 
-@router.post("/thanka/getThanka.php")
+@router.post("/thanka/getThanka")
+@router.post("/thanka/getThanka.php")  # legacy alias
 async def get_thanka_endpoint(request: Request):
     user, _ = await read_request_data(request)
 
@@ -674,7 +675,8 @@ async def get_thanka_endpoint(request: Request):
 
     return json_response(normalized)
 
-@router.post("/thanka/setThanka.php")
+@router.post("/thanka/setThanka")
+@router.post("/thanka/setThanka.php")  # legacy alias
 async def set_thanka_endpoint(request: Request):
     data, files = await read_request_data(request)
     data = build_nested_thanka_form(data)
@@ -820,8 +822,8 @@ def remove_thanka(ad, data):
     return res
 
 
-@router.post("/thanka/thanka.php")
 @router.post("/thanka")
+@router.post("/thanka/thanka.php")  # legacy alias
 async def thanka_methods_endpoint(request: Request):
     data, _ = await read_request_data(request)
 

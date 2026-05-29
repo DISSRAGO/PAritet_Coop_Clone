@@ -855,7 +855,9 @@ function Canvas(props) {
                 address = '/navigator/' + data.Thanka.ParentId;
             }
         }
-        if (mousePosition.elem !== false) {
+        if (mousePosition.elem !== false
+            && Array.isArray(data.Elements)
+            && data.Elements[mousePosition.elem]) {
             address = '/navigator/' + data.Elements[mousePosition.elem].ID;
         }
         if (mousePosition.circle !== false && mousePosition.sector !== false) {

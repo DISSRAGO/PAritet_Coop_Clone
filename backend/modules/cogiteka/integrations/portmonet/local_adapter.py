@@ -326,12 +326,21 @@ class LocalCogiAdapter:
         obj = params.get("Object") or {}
         user_login = str(params.get("UserLogin") or params.get("Login") or "")
 
+        # CustomURL используем как осмысленный fallback вместо «Новая тханка»,
+        # чтобы тултипы секторов и список тханок не показывали пустую заглушку.
+        custom_url_fallback = ""
+        if isinstance(thanka, dict):
+            custom_url_fallback = str(thanka.get("CustomURL") or "").strip()
+        if not custom_url_fallback and isinstance(obj, dict):
+            custom_url_fallback = str(obj.get("CustomURL") or "").strip()
+
         title = (
             (thanka.get("Name") if isinstance(thanka, dict) else None)
             or (obj.get("Name") if isinstance(obj, dict) else None)
+            or custom_url_fallback
             or "Новая тханка"
         )
-        title = str(title).strip() or "Новая тханка"
+        title = str(title).strip() or custom_url_fallback or "Новая тханка"
 
         # Найдём author_id для пользователя (login = avatar.login)
         author_id = self._ensure_author_for(login=user_login)

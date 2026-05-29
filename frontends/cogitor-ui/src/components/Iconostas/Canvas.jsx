@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useActions } from '../../hooks/useActions';
 import { DIRPATH } from "../../utils/url.js";
 import { useMediaQuery } from 'react-responsive'
@@ -600,6 +601,8 @@ function Canvas(props) {
 
     const imgDim = 350;
 
+    const navigate = useNavigate();
+
     let arr = useMemo(() => Elements(props, imgDim, size.w, size.h), [size.w, size.h]);
     let sectorsArr = useMemo(() => thankaArrays(data), []);
     let narr = sectorsArr.narr;
@@ -841,7 +844,18 @@ function Canvas(props) {
     }
 //?lite=true
     function onClick(e) {
-        
+        console.log("CLICK FIRED " + JSON.stringify({
+            thankaId: data?.Id,
+            mousePosition,
+            selectedSector,
+            sectorAtPos: (mousePosition.circle !== false && mousePosition.sector !== false)
+                ? sectorsArr?.thankaArray?.[mousePosition.circle]?.[mousePosition.sector]
+                : null,
+            isLite,
+            isSite,
+            access,
+            mainId,
+        }));
         let address = "";
         if (mousePosition.center && (!isLite || isLite && data.Id != mainId)) {
             if (data.Thanka.DocumentPart == true) {
@@ -855,17 +869,35 @@ function Canvas(props) {
                 address = '/navigator/' + data.Thanka.ParentId;
             }
         }
-        if (mousePosition.elem !== false) {
+        if (mousePosition.elem !== false
+            && Array.isArray(data.Elements)
+            && data.Elements[mousePosition.elem]) {
             address = '/navigator/' + data.Elements[mousePosition.elem].ID;
         }
-        if (mousePosition.circle !== false && mousePosition.sector !== false) {
-            let i = mousePosition.circle;
-            let j = mousePosition.sector;
-            if (sectorsArr.thankaArray[i][j].Id == 0 && access == true && !isLite) window.location.assign("/create");
-            else if (sectorsArr.thankaArray[i][j].Id !== 0 && sectorsArr.thankaArray[i][j].Id !== -1) {
-                address = "/navigator/" + sectorsArr.thankaArray[i][j].URL;
+        // mousePosition может успеть сброситься на elem между mouseMove и onClick
+        // (тонкие сектора, курсор выскакивает за radius[c]). Поэтому
+        // используем selectedSector как fallback — он хранит последний
+        // сектор над которым был ховер.
+        let ci = mousePosition.circle !== false ? mousePosition.circle : selectedSector.circle;
+        let si = mousePosition.sector !== false ? mousePosition.sector : selectedSector.sector;
+        if (ci !== false && si !== false
+            && sectorsArr.thankaArray[ci]
+            && sectorsArr.thankaArray[ci][si]) {
+            const cell = sectorsArr.thankaArray[ci][si];
+            if (cell.Id == 0 && access == true && !isLite) {
+                // SPA-навигация вместо window.location.assign:
+                // redux store с текущей data сохраняется, EditorComponent берёт
+                // ParentId = data.Id (текущая тханка). Это канонический способ
+                // создать дочь текущей тханки из пустого сектора.
+                console.log("CLICK → /create", { parentId: data?.Id });
+                navigate("/create", { state: { data } });
+                return;
+            }
+            else if (cell.Id !== 0 && cell.Id !== -1) {
+                address = "/navigator/" + cell.URL;
             }
         }
+        console.log("CLICK FINAL ADDRESS " + JSON.stringify({ address, isLite, isSite }));
         if (address != "") {
             if (isLite && !isSite) {
                 address += "?lite=true"
@@ -886,6 +918,7 @@ function Canvas(props) {
         ctx.clearRect(0, 0, size.w, size.h)
         ctxT.clearRect(0, 0, size.w + 10, size.h)
         setMouse({ circle: false, sector: false, center: false, elem: false })
+        setSector({ circle: false, sector: false })
     }
 
     return (

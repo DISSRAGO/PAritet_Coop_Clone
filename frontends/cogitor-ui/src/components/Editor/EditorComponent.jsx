@@ -96,9 +96,13 @@ function SelecterType(props) {
     return (
         <>
             <p>Тип:</p>
-            <select onChange={(e) => setSelectedType(e.target.value)} disabled={type == 'edit' ? "disabled" : ""}>
+            <select
+                onChange={(e) => setSelectedType(e.target.value)}
+                disabled={type == 'edit' ? "disabled" : ""}
+                defaultValue={(options.find((o) => o.selected) || {}).value || ""}
+            >
                 {options.map((op) => (
-                    <option value={op.value} defaultValue={op.selected ? op.value : ""}>{op.text}</option>
+                    <option key={op.value} value={op.value}>{op.text}</option>
                 ))}
             </select>
         </>
@@ -112,9 +116,9 @@ function AvatarList(props) {
     return (
         <>
             <p>Аватар:</p>
-            <select onChange={(e) => setSelectedAuthor(e.target.value)}>
+            <select onChange={(e) => setSelectedAuthor(e.target.value)} defaultValue={authorId || ""}>
                 {list.map((avatar) => (
-                    <option value={avatar.ID} selected={avatar.ID == authorId ? 'selected' : ""} >{avatar.Name}</option>
+                    <option key={avatar.ID} value={avatar.ID}>{avatar.Name}</option>
                 ))}
             </select>
         </>
@@ -341,14 +345,14 @@ function EditorInner(props) {
 
     useEffect(() => {
 
-        if (type != 'edit' && data.AvatarList !== null) {
+        if (type != 'edit' && data.AvatarList !== null && data.AvatarList !== undefined) {
             if (data.PrivacyLevel == 6) {
-                if (data.Object.Type == 'avatar') {
+                if (data.Object && data.Object.Type == 'avatar') {
                     setSelectedAuthor(data.Id);
-                } else {
+                } else if (data.Thanka) {
                     setSelectedAuthor(data.Thanka.Author)
                 }
-            } else {
+            } else if (Array.isArray(data.AvatarList) && data.AvatarList.length > 0) {
                 setSelectedAuthor(data.AvatarList[0].ID);
             }
         }

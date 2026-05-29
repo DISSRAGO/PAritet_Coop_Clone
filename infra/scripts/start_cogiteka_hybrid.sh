@@ -69,11 +69,21 @@ else
 fi
 
 echo "[3/6] Starting backend on :$API_PORT ..."
+# uvicorn --reload плодит worker'ы через multiprocessing.spawn,
+# которые при kill мастера отделяются в init и держат порт.
+# Поэтому убиваем всё по PID, по паттерну и по порту.
 if [ -f "$API_DIR/.uvicorn.pid" ]; then
   kill "$(cat "$API_DIR/.uvicorn.pid")" 2>/dev/null || true
   rm -f "$API_DIR/.uvicorn.pid"
 fi
-pkill -f "uvicorn backend.main:app --host 0.0.0.0 --port $API_PORT --reload" 2>/dev/null || true
+pkill -9 -f "uvicorn backend.main:app" 2>/dev/null || true
+# контрольный выстрел: zombie-worker'ы от --reload и любые .venv-процессы
+pkill -9 -f "$PY_VENV/bin/python" 2>/dev/null || true
+# последний рубеж — всё, что всё ещё слушает порт
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k -9 "${API_PORT}/tcp" 2>/dev/null || true
+fi
+sleep 1
 
 nohup env \
 COGI_PROJECT_DIR="$COGI_PROJECT_DIR" \
@@ -113,11 +123,18 @@ else
 fi
 
 echo "[5/6] Starting UI on :$UI_PORT ..."
+# webpack-dev-server тоже может оставлять зомби-процессы,
+# поэтому чистим аналогично backend'у.
 if [ -f "$UI_DIR/.npm.pid" ]; then
   kill "$(cat "$UI_DIR/.npm.pid")" 2>/dev/null || true
   rm -f "$UI_DIR/.npm.pid"
 fi
-pkill -f "react-scripts start" 2>/dev/null || true
+pkill -9 -f "react-scripts start" 2>/dev/null || true
+pkill -9 -f "webpack" 2>/dev/null || true
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k -9 "${UI_PORT}/tcp" 2>/dev/null || true
+fi
+sleep 1
 
 nohup env PORT="$UI_PORT" HOST=0.0.0.0 npm start \
   > "$UI_DIR/npm-start.log" 2>&1 &

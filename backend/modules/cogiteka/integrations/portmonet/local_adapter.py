@@ -357,11 +357,12 @@ class LocalCogiAdapter:
         title = str(title).strip() or custom_url_fallback or "Новая тханка"
 
         # ParentId прилетает из фронта при создании дочки из сектора
-        # родительской тханки. Сохраняем в cogobject.current_content->>'parent_id',
-        # чтобы _children_for() мог вернуть дочек родителя.
+        # родительской тханки. Сохраняем в cogobject.current_content->>'parent_id'
+        # в соответствии с канонической моделью KOGI.Metody:
+        # Cogi.Thanka.Parent (Родитель в дереве) / Cogi.XMLThanka.ParentId.
         parent_id = str(params.get("ParentId") or params.get("ThankaParentId") or "").strip()
         # parent в виде author_id (приходит от кабинета в режиме add) — это не thanka_id,
-        # игнорируем такой вариант (обычная тханка верхнего уровня).
+        # игнорируем такой вариант (пусть подхватится cabinet-fallback ниже).
         if parent_id:
             exists = _q("SELECT 1 FROM thanka WHERE thanka_id::text = %s", (parent_id,))
             if not exists:
@@ -369,6 +370,15 @@ class LocalCogiAdapter:
 
         # Найдём author_id для пользователя (login = avatar.login)
         author_id = self._ensure_author_for(login=user_login)
+
+        # Канон KOGI.Metody / PERVYI-RELIZ: «Первые тханки — потомки аватара».
+        # Если ParentId не был задан — корневая тханка становится
+        # потомком кабинета пользователя. Сам кабинет исключён из выравнивания
+        # (он и есть корень).
+        if not parent_id and not (isinstance(thanka, dict) and thanka.get("IsCabinet")):
+            cabinet_id = self._cabinet_id_for(login=user_login)
+            if cabinet_id:
+                parent_id = cabinet_id
 
         # Создаём тханку
         rows = _q(
@@ -671,6 +681,29 @@ class LocalCogiAdapter:
             (login,),
         )
         return rows
+
+    def _cabinet_id_for(self, login: str) -> str:
+        """thanka_id кабинета (аватара) по login.
+
+        Канон KOGI.Metody: кабинет — корень дерева тханок пользователя.
+        """
+        if not login:
+            return ""
+        rows = _q(
+            """
+            SELECT t.thanka_id::text AS id
+            FROM thanka t
+            JOIN author a ON a.author_id = t.author_id
+            JOIN avatar av ON av.author_id = a.author_id
+            JOIN cogobject co ON co.thanka_id = t.thanka_id
+            WHERE av.login = %s
+              AND (co.current_content->>'is_cabinet')::boolean IS TRUE
+            ORDER BY t.created_at
+            LIMIT 1
+            """,
+            (login,),
+        )
+        return rows[0]["id"] if rows else ""
 
     def _children_for(self, parent_thanka_id: str) -> list[dict]:
         """Дочерние тханки по cogobject.current_content->>'parent_id'.

@@ -193,36 +193,8 @@ class LocalCogiAdapter:
             "CustomURL": custom_url,
         }
 
-        my_thanka_list: list[dict] = []
-        children: list[dict] = []
-        if is_cabinet or obj_type == "avatar":
-            my_thanka_list = self._my_thanka_rows(login=login)
-            # Для кабинета тханки пользователя живут в круге как Children
-            # (сектора), чтобы их можно было прямо открывать из профиля.
-            children = my_thanka_list
-
-        type_name_map = {
-            "avatar": ("Аватар", "аватар", "аватара"),
-            "article": ("Статья", "статью", "статьи"),
-        }
-        type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
-
-        # Для кабинета — выставляем параметры круга по умолчанию (1 круг, не меньше
-        # 12 секторов или сколько тханок, если больше). Если CirclesNum=0,
-        # Canvas.jsx не рендерит ни один круг (см. цикл по c), поэтому минимум 1.
-        if is_cabinet or obj_type == "avatar":
-            circles_num = int(content.get("circles_num") or 0) or 1
-            thanka_obj["CirclesNum"] = circles_num
-            thanka_obj["SectorsNum"] = max(12, len(children))
-            thanka_obj["VisibleElements"] = 0
-            thanka_obj["DocumentPart"] = False
-
         # PrivacyLevel определяет access во фронте:
         #   >=3 — можно создавать тханки, 6 — владелец.
-        # Для собственного кабинета/аватара отдаём 6, чтобы Canvas.jsx
-        # подсвечивал пустые сектора и пускал в /create по клику.
-        # author_id из avatar_list берётся по login запрашивающего, так что
-        # если он совпал с автором тханки — это владелец.
         is_owner = bool(
             author_id
             and row
@@ -230,6 +202,36 @@ class LocalCogiAdapter:
             and str(row["author_id"]) == str(author_id)
         ) or (is_cabinet or obj_type == "avatar")
         privacy_level = 6 if is_owner else 1
+
+        my_thanka_list: list[dict] = []
+        children: list[dict] = []
+        if is_cabinet or obj_type == "avatar":
+            # На кабинете показываем только корневые тханки (без parent_id),
+            # чтобы дочки не дублировались в круге кабинета и в кругах родителей.
+            my_thanka_list = self._my_thanka_rows(login=login, only_roots=True)
+            children = my_thanka_list
+        elif is_owner and row:
+            # Обычная тханка владельца — дочки это те тханки,
+            # у которых cogobject.current_content->>'parent_id' == эта тханка.
+            children = self._children_for(parent_thanka_id=row["id"])
+            # MyThankaList во вложенной тханке тоже полезен для привязки секторов.
+            my_thanka_list = self._my_thanka_rows(login=login, only_roots=False)
+
+        type_name_map = {
+            "avatar": ("Аватар", "аватар", "аватара"),
+            "article": ("Статья", "статью", "статьи"),
+        }
+        type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
+
+        # Для ЛЮБОЙ тханки владельца выставляем круг: 1 круг,
+        # минимум 12 секторов или сколько дочек, если больше.
+        # Пустые сектора при PrivacyLevel=6 кликом ведут в /create.
+        if is_owner:
+            circles_num = int(content.get("circles_num") or 0) or 1
+            thanka_obj["CirclesNum"] = circles_num
+            thanka_obj["SectorsNum"] = max(12, len(children))
+            thanka_obj["VisibleElements"] = 0
+            thanka_obj["DocumentPart"] = False
 
         return {
             "Id": thanka_obj["Id"],
@@ -342,6 +344,17 @@ class LocalCogiAdapter:
         )
         title = str(title).strip() or custom_url_fallback or "Новая тханка"
 
+        # ParentId прилетает из фронта при создании дочки из сектора
+        # родительской тханки. Сохраняем в cogobject.current_content->>'parent_id',
+        # чтобы _children_for() мог вернуть дочек родителя.
+        parent_id = str(params.get("ParentId") or params.get("ThankaParentId") or "").strip()
+        # parent в виде author_id (приходит от кабинета в режиме add) — это не thanka_id,
+        # игнорируем такой вариант (обычная тханка верхнего уровня).
+        if parent_id:
+            exists = _q("SELECT 1 FROM thanka WHERE thanka_id::text = %s", (parent_id,))
+            if not exists:
+                parent_id = ""
+
         # Найдём author_id для пользователя (login = avatar.login)
         author_id = self._ensure_author_for(login=user_login)
 
@@ -358,7 +371,11 @@ class LocalCogiAdapter:
             raise RuntimeError("failed to insert thanka")
         new_thanka_id = rows[0]["id"]
 
-        content = self._build_content(thanka=thanka, obj=obj, defaults={"title": title})
+        content = self._build_content(
+            thanka=thanka,
+            obj=obj,
+            defaults={"title": title, "parent_id": parent_id},
+        )
         _q(
             """
             INSERT INTO cogobject (thanka_id, current_content)
@@ -585,19 +602,29 @@ class LocalCogiAdapter:
                     content["privacy"] = int(thanka.get("Privacy"))
                 except (TypeError, ValueError):
                     pass
+
+        # parent_id — идентификатор родительской тханки. Берём из defaults
+        # (пробрасывается из _h_create_thanka), если был — оставляем в base.
+        parent_id = defaults.get("parent_id") or content.get("parent_id") or ""
+        if parent_id:
+            content["parent_id"] = str(parent_id)
         return content
 
-    def _my_thanka_rows(self, login: str) -> list[dict]:
+    def _my_thanka_rows(self, login: str, only_roots: bool = False) -> list[dict]:
         """Список тханок пользователя для MyThankaList (исключая cabinet).
 
-        Также используется как Children для кабинета — поэтому отдаём
-        DocumentPath (URL клика) и Image (имя файла превью), которые
-        ожидает Canvas.jsx.
+        При only_roots=True возвращаем только корневые тханки (без parent_id),
+        используется как Children для кабинета.
         """
         if not login:
             return []
+        parent_filter = ""
+        if only_roots:
+            parent_filter = (
+                " AND COALESCE(NULLIF(co.current_content->>'parent_id', ''), NULL) IS NULL"
+            )
         rows = _q(
-            """
+            f"""
             SELECT t.thanka_id::text AS "ID",
                    t.title           AS "Name",
                    COALESCE(co.current_content->>'annotation', '') AS "Annotation",
@@ -612,10 +639,39 @@ class LocalCogiAdapter:
             WHERE av.login = %s
               AND t.status <> 'deleted'
               AND COALESCE((co.current_content->>'is_cabinet')::boolean, false) IS FALSE
+              {parent_filter}
             ORDER BY t.created_at DESC
             LIMIT 200
             """,
             (login,),
+        )
+        return rows
+
+    def _children_for(self, parent_thanka_id: str) -> list[dict]:
+        """Дочерние тханки по cogobject.current_content->>'parent_id'.
+
+        Не фильтрует по владельцу — владелец определяется в _h_get_thanka,
+        а дочки могут быть и от других авторов (в будущем для коллаборации).
+        """
+        if not parent_thanka_id:
+            return []
+        rows = _q(
+            """
+            SELECT t.thanka_id::text AS "ID",
+                   t.title           AS "Name",
+                   COALESCE(co.current_content->>'annotation', '') AS "Annotation",
+                   COALESCE(co.current_content->>'type', 'article') AS "Type",
+                   COALESCE(NULLIF(co.current_content->>'custom_url', ''),
+                            t.thanka_id::text) AS "DocumentPath",
+                   ('image' || t.thanka_id::text || '.jpg') AS "Image"
+            FROM thanka t
+            LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+            WHERE t.status <> 'deleted'
+              AND co.current_content->>'parent_id' = %s
+            ORDER BY t.created_at ASC
+            LIMIT 200
+            """,
+            (parent_thanka_id,),
         )
         return rows
 

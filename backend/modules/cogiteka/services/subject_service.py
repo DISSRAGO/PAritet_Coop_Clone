@@ -7,6 +7,8 @@ from fastapi import HTTPException, status
 
 from backend.shared.db import get_conn
 from backend.shared.schemas.subject import (
+    CreateCollectiveSubjectRequest,
+    CreateCollectiveSubjectResponse,
     CreatePersonalSubjectRequest,
     CreatePersonalSubjectResponse,
     SubjectCardResponse,
@@ -46,11 +48,25 @@ def build_display_name(surname: str, first_name: str, second_name: Optional[str]
 
 
 class SubjectService:
+    """Сервис subject-слоя (HomoNet V0.51).
+
+    Владеет таблицами: person, person_profile, subject.
+    Канонические проверки:
+      * subject имеет ровно один источник (person/organization/community);
+      * subject_kind соответствует заполненному FK;
+      * нельзя создать второй subject для того же person/community/organization
+        (на уровне БД — UNIQUE на FK, на уровне сервиса — pre-check + 409).
+    """
+
+    # ---------- helpers --------------------------------------------------
+
     async def _fetch_one(self, query: str, *args):
         async with get_conn() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(query, args)
                 return await cur.fetchone()
+
+    # ---------- UC-03: create personal subject ---------------------------
 
     async def create_personal_subject(
         self,
@@ -130,6 +146,18 @@ class SubjectService:
                         """,
                         (person_id, auth_user["user_id"]),
                     )
+                else:
+                    # дополнительная защита: если у person уже есть subject —
+                    # вернём 409 заранее, не дожидаясь UNIQUE violation
+                    existing = await self._fetch_one(
+                        "SELECT subject_id FROM homonet.subject WHERE person_id = %s",
+                        person_id,
+                    )
+                    if existing:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Personal subject already exists for this person",
+                        )
 
                 await cur.execute(
                     """
@@ -160,6 +188,65 @@ class SubjectService:
             message="Personal subject created",
         )
 
+    # ---------- UC-05: create collective subject -------------------------
+
+    async def create_collective_subject(
+        self,
+        payload: CreateCollectiveSubjectRequest,
+    ) -> CreateCollectiveSubjectResponse:
+        community = await self._fetch_one(
+            """
+            SELECT community_id, name, status
+            FROM homonet.community
+            WHERE community_id = %s
+            """,
+            payload.communityId.strip(),
+        )
+        if not community:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Community not found",
+            )
+
+        existing = await self._fetch_one(
+            "SELECT subject_id FROM homonet.subject WHERE community_id = %s",
+            community["community_id"],
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Collective subject already exists for this community",
+            )
+
+        display_name = (payload.displayName or community["name"]).strip()
+        if not display_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="displayName is empty",
+            )
+
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO homonet.subject
+                        (subject_kind, community_id, display_name, status)
+                    VALUES
+                        ('collective', %s, %s, 'active')
+                    RETURNING subject_id
+                    """,
+                    (community["community_id"], display_name),
+                )
+                row = await cur.fetchone()
+                subject_id = row["subject_id"]
+
+        return CreateCollectiveSubjectResponse(
+            subjectId=str(subject_id),
+            message="Collective subject created",
+        )
+
+    # ---------- get subject card -----------------------------------------
+
     async def get_subject_card(self, subject_id: str) -> SubjectCardResponse:
         row = await self._fetch_one(
             """
@@ -167,13 +254,14 @@ class SubjectService:
                 s.subject_id,
                 s.subject_kind,
                 s.display_name,
-                p.display_name AS person_display_name,
-                au.login AS auth_user_login,
-                au.email,
-                au.phone
+                s.status,
+                s.person_id,
+                s.organization_id,
+                s.community_id,
+                au.login   AS auth_user_login,
+                au.email   AS auth_user_email,
+                au.phone   AS auth_user_phone
             FROM homonet.subject s
-            LEFT JOIN homonet.person p
-                ON p.person_id = s.person_id
             LEFT JOIN homonet.auth_user au
                 ON au.subject_id = s.subject_id
             WHERE s.subject_id = %s
@@ -189,12 +277,13 @@ class SubjectService:
 
         return SubjectCardResponse(
             id=str(row["subject_id"]),
-            subjectType=str(row["subject_kind"]),
+            subjectKind=str(row["subject_kind"]),
             displayName=row["display_name"],
-            surname=None,
-            firstName=row["person_display_name"],
-            secondName=None,
-            email=row["email"],
-            phone=row["phone"],
+            status=str(row["status"]),
+            personId=str(row["person_id"]) if row["person_id"] else None,
+            organizationId=str(row["organization_id"]) if row["organization_id"] else None,
+            communityId=str(row["community_id"]) if row["community_id"] else None,
             authUserLogin=row["auth_user_login"],
+            email=row["auth_user_email"],
+            phone=row["auth_user_phone"],
         )

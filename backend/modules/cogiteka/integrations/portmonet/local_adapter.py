@@ -194,14 +194,25 @@ class LocalCogiAdapter:
         }
 
         my_thanka_list: list[dict] = []
+        children: list[dict] = []
         if is_cabinet or obj_type == "avatar":
             my_thanka_list = self._my_thanka_rows(login=login)
+            # Для кабинета тханки пользователя живут в круге как Children
+            # (сектора), чтобы их можно было прямо открывать из профиля.
+            children = my_thanka_list
 
         type_name_map = {
             "avatar": ("Аватар", "аватар", "аватара"),
             "article": ("Статья", "статью", "статьи"),
         }
         type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
+
+        # Для кабинета — выставляем параметры круга по умолчанию (1 круг, не меньше
+        # 12 секторов или сколько тханок, если больше).
+        if is_cabinet or obj_type == "avatar":
+            thanka_obj["CirclesNum"] = int(content.get("circles_num") or 0)
+            thanka_obj["SectorsNum"] = max(12, len(children))
+            thanka_obj["VisibleElements"] = 0
 
         return {
             "Id": thanka_obj["Id"],
@@ -217,7 +228,7 @@ class LocalCogiAdapter:
             "Removed": False,
             "AvatarList": avatar_list,
             "Content": [],
-            "Children": [],
+            "Children": children,
             "MyThankaList": my_thanka_list,
             "MySubscribeList": [],
             "DocumentsParts": [],

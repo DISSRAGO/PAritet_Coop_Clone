@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Request
 
 from backend.modules.cogiteka.core.cache import cache
@@ -14,9 +16,18 @@ EXCLUDED_COUNTRY_IDS = {
     "17", "26",
 }
 
+# Локальный режим без SOAP-адресника: отдаём заглушки, чтобы <Location>
+# в редакторе не падал в catch (500 → "Произошла ошибка").
+_USE_LOCAL = os.getenv("COGI_USE_PORTMONET", "0").strip().lower() not in {"1", "true", "yes", "on"}
+
+_LOCAL_COUNTRIES = [{"Id": "1", "Name": "Россия"}]
+_LOCAL_REGIONS = [{"Id": "1", "Name": "Новосибирская обл."}]
+_LOCAL_CITIES = [{"Id": "1", "Name": "Новосибирск г."}]
+
 
 def adapter():
-    return PortmonetApi().create_adapter(ADDRESS_SERVICE, SOC_PATH)
+    # ADDRESS_SERVICE в локальном режиме не используется, передаём пустую строку.
+    return PortmonetApi().create_adapter("", SOC_PATH)
 
 
 def get_country(ad):
@@ -57,6 +68,18 @@ def get_city(ad, value):
 async def location_endpoint(request: Request):
     method = request.query_params.get("method")
     value = request.query_params.get("value")
+
+    # В локальном режиме отдаём минимальные справочники — собственный адресник ещё
+    # не реализован, а SOAP-бэкенд недоступен.
+    if _USE_LOCAL:
+        if method == "country":
+            return json_response({"Country": _LOCAL_COUNTRIES})
+        if method == "region":
+            return json_response({"Region": _LOCAL_REGIONS})
+        if method == "city":
+            return json_response({"City": _LOCAL_CITIES})
+        return json_response({})
+
     ad = adapter()
 
     if method == "country":

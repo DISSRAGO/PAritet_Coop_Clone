@@ -217,11 +217,25 @@ class LocalCogiAdapter:
             thanka_obj["VisibleElements"] = 0
             thanka_obj["DocumentPart"] = False
 
+        # PrivacyLevel определяет access во фронте:
+        #   >=3 — можно создавать тханки, 6 — владелец.
+        # Для собственного кабинета/аватара отдаём 6, чтобы Canvas.jsx
+        # подсвечивал пустые сектора и пускал в /create по клику.
+        # author_id из avatar_list берётся по login запрашивающего, так что
+        # если он совпал с автором тханки — это владелец.
+        is_owner = bool(
+            author_id
+            and row
+            and row.get("author_id")
+            and str(row["author_id"]) == str(author_id)
+        ) or (is_cabinet or obj_type == "avatar")
+        privacy_level = 6 if is_owner else 1
+
         return {
             "Id": thanka_obj["Id"],
             "CabinetId": 0,
             "IsAdmin": True,
-            "PrivacyLevel": 1,
+            "PrivacyLevel": privacy_level,
             "Thanka": thanka_obj,
             "Object": {
                 "Type": obj_type,

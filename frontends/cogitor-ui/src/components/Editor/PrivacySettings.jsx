@@ -15,16 +15,17 @@ function Elements(props) {
 
     const { data, elemArr, setElements } = props;
 
+    //таблица-подсказка для стихий
+    const [isTableVision, setTableVision] = useState(false);
+
+    const [selectedElements, setSelectedElements] = useState(elemArr);
+
     useEffect(() => {
         if (data.Elements != null && selectedElements.length == 0) {
             setSelectedElements(elemArr);
         }
     }, [elemArr]);
 
-    //таблица-подсказка для стихий
-    const [isTableVision, setTableVision] = useState(false);
-
-    const [selectedElements, setSelectedElements] = useState(elemArr);
     const onChangeElements = (e) => {
         let elements = selectedElements.slice(0);
         let i = e.target.name;
@@ -32,7 +33,11 @@ function Elements(props) {
         setSelectedElements(elements);
     };
 
-    setElements(selectedElements);
+    // раньше setElements(...) вызывался прямо в render — это вызывало React-предупреждение
+    // «Cannot update a component while rendering a different component». Переносим в effect.
+    useEffect(() => {
+        setElements(selectedElements);
+    }, [selectedElements]);
 
     const [list, setList] = useState(data.Elements)
 

@@ -756,12 +756,29 @@ async def set_thanka_endpoint(request: Request):
         return json_response({"Error": "unknown EditorType"}, status_code=400)
 
     if "Picture" in files and result_id:
-        coords = {
-            "top": data.get("PictureCoords_top", 0),
-            "left": data.get("PictureCoords_left", 0),
-            "height": data.get("PictureCoords_height", 0),
-            "width": data.get("PictureCoords_width", 0),
-        }
+        pc = data.get("PictureCoords")
+        if isinstance(pc, dict):
+            coords = {
+                "top": pc.get("top", 0),
+                "left": pc.get("left", 0),
+                "height": pc.get("height", 0),
+                "width": pc.get("width", 0),
+            }
+        else:
+            coords = {
+                "top": data.get("PictureCoords_top", 0),
+                "left": data.get("PictureCoords_left", 0),
+                "height": data.get("PictureCoords_height", 0),
+                "width": data.get("PictureCoords_width", 0),
+            }
+        # защита от нулевого crop: если width/height пустые или 0 — сбрасываем
+        # в None, и save_thanka_picture возьмёт полный размер исходника.
+        try:
+            if float(coords.get("width") or 0) <= 0 or float(coords.get("height") or 0) <= 0:
+                coords = {"top": 0, "left": 0, "width": 0, "height": 0}
+        except (TypeError, ValueError):
+            coords = {"top": 0, "left": 0, "width": 0, "height": 0}
+        print("SET_THANKA_PIC", {"id": result_id, "coords": coords, "filename": getattr(files["Picture"], "filename", None)})
         await save_thanka_picture(result_id, files["Picture"], DATA_DIR, coords)
 
     if res.Error:

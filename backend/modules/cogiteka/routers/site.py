@@ -51,8 +51,9 @@ async def set_style(data, files):
     return {"Result": True}
 
 
-@router.post("/site/site.php")
 @router.post("/site")
+@router.post("/site/site")
+@router.post("/site/site.php")  # legacy alias
 async def site_endpoint(request: Request):
     data, files = await read_request_data(request)
     method = data.get("method")

@@ -661,7 +661,12 @@ class LocalCogiAdapter:
         rows = _q(
             f"""
             SELECT t.thanka_id::text AS "ID",
-                   t.title           AS "Name",
+                   COALESCE(
+                       NULLIF(co.current_content->>'title', ''),
+                       NULLIF(NULLIF(t.title, ''), 'Новая тханка'),
+                       NULLIF(co.current_content->>'custom_url', ''),
+                       'Новая тханка'
+                   ) AS "Name",
                    COALESCE(co.current_content->>'annotation', '') AS "Annotation",
                    COALESCE(co.current_content->>'type', 'article') AS "Type",
                    COALESCE(NULLIF(co.current_content->>'custom_url', ''),
@@ -716,7 +721,17 @@ class LocalCogiAdapter:
         rows = _q(
             """
             SELECT t.thanka_id::text AS "ID",
-                   t.title           AS "Name",
+                   -- Канонический Name (тултип сектора):
+                   -- 1) cogobject.current_content.title (актуально для тханок, у которых редактировали)
+                   -- 2) thanka.title из БД, если он не пустой и не дефолт 'Новая тханка'
+                   -- 3) custom_url (CustomURL) — fallback, как при создании
+                   -- 4) 'Новая тханка' — последний fallback
+                   COALESCE(
+                       NULLIF(co.current_content->>'title', ''),
+                       NULLIF(NULLIF(t.title, ''), 'Новая тханка'),
+                       NULLIF(co.current_content->>'custom_url', ''),
+                       'Новая тханка'
+                   ) AS "Name",
                    COALESCE(co.current_content->>'annotation', '') AS "Annotation",
                    COALESCE(co.current_content->>'type', 'article') AS "Type",
                    COALESCE(NULLIF(co.current_content->>'custom_url', ''),

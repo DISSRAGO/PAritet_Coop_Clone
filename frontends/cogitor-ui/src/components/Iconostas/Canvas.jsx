@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useActions } from '../../hooks/useActions';
 import { DIRPATH } from "../../utils/url.js";
 import { useMediaQuery } from 'react-responsive'
@@ -600,6 +601,8 @@ function Canvas(props) {
 
     const imgDim = 350;
 
+    const navigate = useNavigate();
+
     let arr = useMemo(() => Elements(props, imgDim, size.w, size.h), [size.w, size.h]);
     let sectorsArr = useMemo(() => thankaArrays(data), []);
     let narr = sectorsArr.narr;
@@ -881,7 +884,15 @@ function Canvas(props) {
             && sectorsArr.thankaArray[ci]
             && sectorsArr.thankaArray[ci][si]) {
             const cell = sectorsArr.thankaArray[ci][si];
-            if (cell.Id == 0 && access == true && !isLite) window.location.assign("/create");
+            if (cell.Id == 0 && access == true && !isLite) {
+                // SPA-навигация вместо window.location.assign:
+                // redux store с текущей data сохраняется, EditorComponent берёт
+                // ParentId = data.Id (текущая тханка). Это канонический способ
+                // создать дочь текущей тханки из пустого сектора.
+                console.log("CLICK → /create", { parentId: data?.Id });
+                navigate("/create", { state: { data } });
+                return;
+            }
             else if (cell.Id !== 0 && cell.Id !== -1) {
                 address = "/navigator/" + cell.URL;
             }

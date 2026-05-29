@@ -1,15 +1,30 @@
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from backend.modules.cogiteka.routers.request import request_router
+
 from backend.modules.cogiteka.router import cogi_router
+from backend.modules.cogiteka.routers.request import request_router
 from backend.modules.cogiteka.site_router import site_router
+from backend.shared.db import close_db_pool, init_db_pool
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+ENV_FILE = ROOT_DIR / ".env"
+load_dotenv(dotenv_path=ENV_FILE)
 
 
-app = FastAPI(title="HomoNet API - Shared Server")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db_pool()
+    yield
+    await close_db_pool()
+
+
+app = FastAPI(title="HomoNet API - Shared Server", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,7 +38,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = Path(os.getenv("DATA_DIR", "/srv/clone/data"))
 STYLES_DIR = DATA_DIR / "styles"
 
@@ -34,7 +48,7 @@ if DATA_DIR.is_dir():
 
 
 @app.get("/")
-def root():
+async def root():
     return {
         "message": "HomoNet Shared API",
         "projects": ["cogiteka", "future1", "future2"],
@@ -45,13 +59,14 @@ app.include_router(cogi_router)
 app.include_router(site_router)
 app.include_router(request_router)
 
+
 @app.get("/cogi/status")
-def cogi_status():
+async def cogi_status():
     return {"cogiAPI": "active", "mode": "router+legacy-site"}
 
 
 @app.get("/debug/routes")
-def debug_routes():
+async def debug_routes():
     result = []
 
     for route in app.routes:
@@ -65,6 +80,7 @@ def debug_routes():
         )
 
     return sorted(result, key=lambda x: x["path"] or "")
+
 
 if __name__ == "__main__":
     import uvicorn

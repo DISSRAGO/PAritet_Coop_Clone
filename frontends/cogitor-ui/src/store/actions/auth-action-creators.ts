@@ -25,7 +25,7 @@ export const AuthActionCreators = {
                 async (dispatch: AppDispatch) => {
                         dispatch({ type: AuthActionEnum.LOGIN_REQUEST });
 
-                        AuthService.signIn(login, password)
+                        AuthService.signIn( {login, password})
                                 .then((data) => {
                                         localStorage.setItem("accessToken", data.accessToken);
                                         localStorage.setItem("refreshToken", data.refreshToken);

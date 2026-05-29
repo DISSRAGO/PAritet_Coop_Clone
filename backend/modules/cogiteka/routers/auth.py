@@ -13,7 +13,7 @@ from backend.shared.schemas.auth import (
 from backend.modules.cogiteka.services.auth_service import AuthService
 
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def get_auth_service() -> AuthService:

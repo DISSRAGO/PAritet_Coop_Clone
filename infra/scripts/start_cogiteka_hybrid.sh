@@ -22,7 +22,17 @@ export COGI_STYLE_PATH="${COGI_STYLE_PATH:-http://127.0.0.1:$API_PORT/data/style
 export COGI_PDF_PATH="${COGI_PDF_PATH:-http://127.0.0.1:$API_PORT/data/pdf/}"
 export COGI_SITE_NAVIGATOR_URL="${COGI_SITE_NAVIGATOR_URL:-http://127.0.0.1:$UI_PORT/navigator/}"
 export COGI_START_THANKA_ID="${COGI_START_THANKA_ID:-18352}"
-export DATABASE_URL="postgresql://clone_app:clone_app_dev@127.0.0.1:5432/homonet_v051_test"
+ENV_FILE="$ROOT/.env"
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$ENV_FILE"
+  set +a
+fi
+
+: "${DATABASE_URL:?ERROR: DATABASE_URL is not set. Put it into $ENV_FILE}"
+
 cd "$ROOT"
 
 if [ "$WITH_INFRA" = "1" ]; then

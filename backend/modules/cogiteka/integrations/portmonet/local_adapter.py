@@ -208,11 +208,14 @@ class LocalCogiAdapter:
         type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
 
         # Для кабинета — выставляем параметры круга по умолчанию (1 круг, не меньше
-        # 12 секторов или сколько тханок, если больше).
+        # 12 секторов или сколько тханок, если больше). Если CirclesNum=0,
+        # Canvas.jsx не рендерит ни один круг (см. цикл по c), поэтому минимум 1.
         if is_cabinet or obj_type == "avatar":
-            thanka_obj["CirclesNum"] = int(content.get("circles_num") or 0)
+            circles_num = int(content.get("circles_num") or 0) or 1
+            thanka_obj["CirclesNum"] = circles_num
             thanka_obj["SectorsNum"] = max(12, len(children))
             thanka_obj["VisibleElements"] = 0
+            thanka_obj["DocumentPart"] = False
 
         return {
             "Id": thanka_obj["Id"],
@@ -557,7 +560,12 @@ class LocalCogiAdapter:
         return content
 
     def _my_thanka_rows(self, login: str) -> list[dict]:
-        """Список тханок пользователя для MyThankaList (исключая cabinet)."""
+        """Список тханок пользователя для MyThankaList (исключая cabinet).
+
+        Также используется как Children для кабинета — поэтому отдаём
+        DocumentPath (URL клика) и Image (имя файла превью), которые
+        ожидает Canvas.jsx.
+        """
         if not login:
             return []
         rows = _q(
@@ -565,7 +573,10 @@ class LocalCogiAdapter:
             SELECT t.thanka_id::text AS "ID",
                    t.title           AS "Name",
                    COALESCE(co.current_content->>'annotation', '') AS "Annotation",
-                   COALESCE(co.current_content->>'type', 'article') AS "Type"
+                   COALESCE(co.current_content->>'type', 'article') AS "Type",
+                   COALESCE(NULLIF(co.current_content->>'custom_url', ''),
+                            t.thanka_id::text) AS "DocumentPath",
+                   ('image' || t.thanka_id::text || '.jpg') AS "Image"
             FROM thanka t
             JOIN author a ON a.author_id = t.author_id
             JOIN avatar av ON av.author_id = a.author_id

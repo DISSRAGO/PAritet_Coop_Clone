@@ -707,6 +707,34 @@ class LocalCogiAdapter:
         return author_id
 
 
+# --- community stubs ---------------------------------------------------------
+# Community / Notifications пока не реализованы в локальном бэкенде, но фронт
+# дёргает getThemes / getComments при монтировании <Comment>. Чтобы не словить
+# "Произошла ошибка" на каждом навигаторе — отдаём явные null'ы (фронт проверяет
+# `!== null` перед обращением к [0]).
+
+def _h_get_themes(self, params: dict) -> dict:  # noqa: ARG001
+    return {"ThemeList": None}
+
+
+def _h_get_comments(self, params: dict) -> dict:  # noqa: ARG001
+    return {"CommentList": None}
+
+
+def _h_get_all_comments(self, params: dict) -> dict:  # noqa: ARG001
+    return {"CommentList": None}
+
+
+def _h_community_noop(self, params: dict) -> dict:  # noqa: ARG001
+    return {}
+
+
+LocalCogiAdapter._h_get_themes = _h_get_themes  # type: ignore[attr-defined]
+LocalCogiAdapter._h_get_comments = _h_get_comments  # type: ignore[attr-defined]
+LocalCogiAdapter._h_get_all_comments = _h_get_all_comments  # type: ignore[attr-defined]
+LocalCogiAdapter._h_community_noop = _h_community_noop  # type: ignore[attr-defined]
+
+
 # Регистрируем диспетчер методов в виде словаря {method_name -> handler}
 LocalCogiAdapter._dispatch = {  # type: ignore[attr-defined]
     "GetThanka": LocalCogiAdapter._h_get_thanka,
@@ -719,6 +747,19 @@ LocalCogiAdapter._dispatch = {  # type: ignore[attr-defined]
     "GetCabinetByUser": LocalCogiAdapter._h_get_cabinet_by_user,
     "GetIdByCustomURL": LocalCogiAdapter._h_get_id_by_custom_url,
     "IsDocumentPart": LocalCogiAdapter._h_is_document_part,
+    # community / notifications stubs
+    "GetThemes": LocalCogiAdapter._h_get_themes,
+    "GetComments": LocalCogiAdapter._h_get_comments,
+    "GetAllComments": LocalCogiAdapter._h_get_all_comments,
+    "GetMyAnswers": LocalCogiAdapter._h_get_all_comments,
+    "CreateComment": LocalCogiAdapter._h_community_noop,
+    "CreateTheme": LocalCogiAdapter._h_community_noop,
+    "DeleteComment": LocalCogiAdapter._h_community_noop,
+    "RemoveTheme": LocalCogiAdapter._h_community_noop,
+    "EditComment": LocalCogiAdapter._h_community_noop,
+    "SetNotificationSeen": LocalCogiAdapter._h_community_noop,
+    "CreateSystemNotifications": LocalCogiAdapter._h_community_noop,
+    "SendMessageForAdmin": LocalCogiAdapter._h_community_noop,
 }
 
 

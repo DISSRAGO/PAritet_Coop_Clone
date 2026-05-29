@@ -138,13 +138,12 @@ class LocalCogiAdapter:
 
     def _h_get_thanka(self, params: dict) -> dict:
         """
-        Минимальный ответ для редактора. Если у пользователя нет ни одной
-        тханки/аватара — возвращаем skeleton с одним аватаром (сам юзер),
-        чтобы EditorSite не падал на AvatarList[0].
+        Возвращает данные тханки/кабинета.
+        Если параметром приходит cabinet-тханка пользователя — кладём в
+        MyThankaList все его тханки (это страница /profile).
         """
         thanka_id = str(params.get("Id") or "")
         login = str(params.get("Login") or "")
-        user_id = str(params.get("UserId") or "")
 
         avatar_list = self._avatar_list_for(login=login)
         author_id = avatar_list[0]["ID"] if avatar_list else ""
@@ -156,6 +155,7 @@ class LocalCogiAdapter:
                 SELECT t.thanka_id::text AS id,
                        t.title           AS name,
                        t.status          AS status,
+                       t.author_id::text AS author_id,
                        COALESCE(co.current_content, '{}'::jsonb) AS content
                 FROM thanka t
                 LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
@@ -167,18 +167,41 @@ class LocalCogiAdapter:
             if rows:
                 row = rows[0]
 
+        content = (row["content"] if row else {}) or {}
+        if isinstance(content, str):
+            import json as _json
+            try:
+                content = _json.loads(content)
+            except Exception:
+                content = {}
+
+        is_cabinet = bool(content.get("is_cabinet"))
+        obj_type = content.get("type") or ("avatar" if is_cabinet else "article")
+        custom_url = content.get("custom_url") or ""
+
         thanka_obj = {
             "Id": (row["id"] if row else thanka_id) or "",
-            "Name": (row["name"] if row else "КОГИТЕКА"),
-            "Annotation": "",
-            "Privacy": 1,
+            "Name": (row["name"] if row else (login or "КОГИТЕКА")),
+            "Annotation": content.get("annotation") or "",
+            "Privacy": int(content.get("privacy") or 1),
             "Comments": False,
             "MainPage": False,
             "ParentId": "",
             "ParentName": "",
-            "Author": author_id,
+            "Author": (row["author_id"] if row else author_id) or author_id,
             "AuthorName": login,
+            "CustomURL": custom_url,
         }
+
+        my_thanka_list: list[dict] = []
+        if is_cabinet or obj_type == "avatar":
+            my_thanka_list = self._my_thanka_rows(login=login)
+
+        type_name_map = {
+            "avatar": ("Аватар", "аватар", "аватара"),
+            "article": ("Статья", "статью", "статьи"),
+        }
+        type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
 
         return {
             "Id": thanka_obj["Id"],
@@ -187,15 +210,15 @@ class LocalCogiAdapter:
             "PrivacyLevel": 1,
             "Thanka": thanka_obj,
             "Object": {
-                "Type": "article",
-                "Description": "",
+                "Type": obj_type,
+                "Description": content.get("description") or "",
                 "Name": thanka_obj["Name"],
             },
             "Removed": False,
             "AvatarList": avatar_list,
             "Content": [],
             "Children": [],
-            "MyThankaList": [],
+            "MyThankaList": my_thanka_list,
             "MySubscribeList": [],
             "DocumentsParts": [],
             "LinksTo": [],
@@ -209,9 +232,9 @@ class LocalCogiAdapter:
             "ChildrenImage": {},
             "DocImage": {},
             "Request": {},
-            "TypeName": "Статья",
-            "Accusativus": "статью",
-            "Genitivus": "статьи",
+            "TypeName": type_name,
+            "Accusativus": accus,
+            "Genitivus": genit,
         }
 
     def _h_get_site_page(self, params: dict) -> dict:
@@ -266,11 +289,11 @@ class LocalCogiAdapter:
         """
         UC-create-thanka: создаём минимальную тханку для текущего пользователя.
         Источник данных: data['Thanka'], data['Object'].
+        Сохраняем CustomURL/annotation/privacy в cogobject.current_content.
         """
         thanka = params.get("Thanka") or {}
         obj = params.get("Object") or {}
-        user_login = str(params.get("UserLogin") or "")
-        user_id = str(params.get("UserId") or "")
+        user_login = str(params.get("UserLogin") or params.get("Login") or "")
 
         title = (
             (thanka.get("Name") if isinstance(thanka, dict) else None)
@@ -295,12 +318,7 @@ class LocalCogiAdapter:
             raise RuntimeError("failed to insert thanka")
         new_thanka_id = rows[0]["id"]
 
-        # Создаём cogobject со снимком контента
-        content = {
-            "title": title,
-            "description": obj.get("Description") if isinstance(obj, dict) else "",
-            "type": obj.get("Type") if isinstance(obj, dict) else "article",
-        }
+        content = self._build_content(thanka=thanka, obj=obj, defaults={"title": title})
         _q(
             """
             INSERT INTO cogobject (thanka_id, current_content)
@@ -319,13 +337,15 @@ class LocalCogiAdapter:
                 "Name": title,
                 "Author": author_id or "",
                 "AuthorName": user_login,
+                "CustomURL": content.get("custom_url") or "",
             },
             "Object": {"Name": title, "Type": content["type"]},
         }
 
     def _h_set_thanka(self, params: dict) -> dict:
         """
-        Редактирование существующей тханки: меняем title и snapshot.
+        Редактирование существующей тханки: меняем title и snapshot,
+        сохраняем CustomURL.
         """
         thanka = params.get("Thanka") or {}
         obj = params.get("Object") or {}
@@ -343,11 +363,20 @@ class LocalCogiAdapter:
         if title:
             _q("UPDATE thanka SET title = %s WHERE thanka_id::text = %s", (title, thanka_id))
 
-        content = {
-            "title": title,
-            "description": obj.get("Description") if isinstance(obj, dict) else "",
-            "type": obj.get("Type") if isinstance(obj, dict) else "article",
-        }
+        # подмешиваем существующий контент, чтобы не потерять флаги (is_cabinet)
+        existing_rows = _q(
+            "SELECT current_content FROM cogobject WHERE thanka_id::text = %s",
+            (thanka_id,),
+        )
+        existing = (existing_rows[0]["current_content"] if existing_rows else {}) or {}
+        if isinstance(existing, str):
+            import json as _json
+            try:
+                existing = _json.loads(existing)
+            except Exception:
+                existing = {}
+
+        content = self._build_content(thanka=thanka, obj=obj, defaults={"title": title}, base=existing)
         _q(
             """
             INSERT INTO cogobject (thanka_id, current_content)
@@ -388,6 +417,157 @@ class LocalCogiAdapter:
     def _h_check_custom_url(self, params: dict) -> dict:
         # MVP: всегда свободно
         return {"Result": True}
+
+    def _h_get_cabinet_by_user(self, params: dict) -> dict:
+        """
+        Возвращает Id «кабинетной» тханки пользователя. Если её ещё нет —
+        создаёт. Эта тханка отображается как страница /profile с типом
+        Object.Type='avatar' и подгружает MyThankaList.
+        """
+        login = str(params.get("Login") or "")
+        if not login:
+            return {"Id": ""}
+
+        author_id = self._ensure_author_for(login=login)
+        if not author_id:
+            return {"Id": ""}
+
+        rows = _q(
+            """
+            SELECT t.thanka_id::text AS id
+            FROM thanka t
+            JOIN cogobject co ON co.thanka_id = t.thanka_id
+            WHERE t.author_id::text = %s
+              AND (co.current_content->>'is_cabinet')::boolean IS TRUE
+            ORDER BY t.created_at ASC
+            LIMIT 1
+            """,
+            (author_id,),
+        )
+        if rows:
+            return {"Id": rows[0]["id"]}
+
+        # создаём кабинет-тханку
+        ins = _q(
+            """
+            INSERT INTO thanka (title, author_id, status)
+            VALUES (%s, %s, 'active')
+            RETURNING thanka_id::text AS id
+            """,
+            (login, author_id),
+        )
+        if not ins:
+            return {"Id": ""}
+        cab_id = ins[0]["id"]
+        cab_content = {
+            "title": login,
+            "description": "",
+            "type": "avatar",
+            "is_cabinet": True,
+            "privacy": 1,
+            "custom_url": "",
+        }
+        _q(
+            """
+            INSERT INTO cogobject (thanka_id, current_content)
+            VALUES (%s, %s::jsonb)
+            ON CONFLICT (thanka_id) DO UPDATE
+                SET current_content = EXCLUDED.current_content,
+                    updated_at = now()
+            """,
+            (cab_id, _json_dumps(cab_content)),
+        )
+        return {"Id": cab_id}
+
+    def _h_get_id_by_custom_url(self, params: dict) -> dict:
+        """
+        Ищет тханку/сайт по custom_url. Возвращает {Id, Type} где
+        Type ∈ {'navigator','sitepage'} (для MVP всегда 'navigator').
+        """
+        url = str(params.get("url") or "").strip()
+        if not url:
+            return {"Id": "", "Type": ""}
+        # Допускаем как ведущий слэш, так и без него
+        candidates = {url, "/" + url.lstrip("/")}
+        for candidate in list(candidates):
+            if candidate.startswith("/"):
+                candidates.add(candidate[1:])
+        candidates_list = list(candidates)
+        rows = _q(
+            """
+            SELECT t.thanka_id::text AS id
+            FROM cogobject co
+            JOIN thanka t ON t.thanka_id = co.thanka_id
+            WHERE co.current_content->>'custom_url' = ANY(%s)
+            ORDER BY t.created_at DESC
+            LIMIT 1
+            """,
+            (candidates_list,),
+        )
+        if rows:
+            return {"Id": rows[0]["id"], "Type": "navigator"}
+        return {"Id": "", "Type": ""}
+
+    def _h_is_document_part(self, params: dict) -> dict:
+        # MVP: не часть документа
+        return False
+
+    # --- helpers --------------------------------------------------------------
+
+    def _build_content(
+        self,
+        thanka: Any,
+        obj: Any,
+        defaults: dict,
+        base: dict | None = None,
+    ) -> dict:
+        """Собирает payload для cogobject.current_content из Thanka/Object."""
+        content = dict(base or {})
+        title = defaults.get("title") or content.get("title") or ""
+        content["title"] = title
+        if isinstance(obj, dict):
+            if obj.get("Description") is not None:
+                content["description"] = obj.get("Description")
+            if obj.get("Type"):
+                content["type"] = obj.get("Type")
+        content.setdefault("description", "")
+        content.setdefault("type", "article")
+
+        if isinstance(thanka, dict):
+            if "CustomURL" in thanka and thanka.get("CustomURL") is not None:
+                content["custom_url"] = str(thanka.get("CustomURL") or "").strip()
+            if thanka.get("Annotation") is not None:
+                content["annotation"] = thanka.get("Annotation")
+            if thanka.get("Privacy") is not None:
+                try:
+                    content["privacy"] = int(thanka.get("Privacy"))
+                except (TypeError, ValueError):
+                    pass
+        return content
+
+    def _my_thanka_rows(self, login: str) -> list[dict]:
+        """Список тханок пользователя для MyThankaList (исключая cabinet)."""
+        if not login:
+            return []
+        rows = _q(
+            """
+            SELECT t.thanka_id::text AS "ID",
+                   t.title           AS "Name",
+                   COALESCE(co.current_content->>'annotation', '') AS "Annotation",
+                   COALESCE(co.current_content->>'type', 'article') AS "Type"
+            FROM thanka t
+            JOIN author a ON a.author_id = t.author_id
+            JOIN avatar av ON av.author_id = a.author_id
+            LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+            WHERE av.login = %s
+              AND t.status <> 'deleted'
+              AND COALESCE((co.current_content->>'is_cabinet')::boolean, false) IS FALSE
+            ORDER BY t.created_at DESC
+            LIMIT 200
+            """,
+            (login,),
+        )
+        return rows
 
     # --- utils ----------------------------------------------------------------
 
@@ -495,6 +675,9 @@ LocalCogiAdapter._dispatch = {  # type: ignore[attr-defined]
     "GetMyThanka": LocalCogiAdapter._h_get_my_thanka,
     "RemoveThanka": LocalCogiAdapter._h_remove_thanka,
     "CheckCustomURL": LocalCogiAdapter._h_check_custom_url,
+    "GetCabinetByUser": LocalCogiAdapter._h_get_cabinet_by_user,
+    "GetIdByCustomURL": LocalCogiAdapter._h_get_id_by_custom_url,
+    "IsDocumentPart": LocalCogiAdapter._h_is_document_part,
 }
 
 

@@ -229,19 +229,22 @@ class LocalCogiAdapter:
                 "Name": thanka_obj["Name"],
             },
             "Removed": False,
-            "AvatarList": avatar_list,
-            "Content": [],
-            "Children": children,
-            "MyThankaList": my_thanka_list,
-            "MySubscribeList": [],
-            "DocumentsParts": [],
-            "LinksTo": [],
-            "LinksFrom": [],
-            "LinksSectors": [],
-            "Elements": [],
+            # Роутер пропускает все коллекции через registered(), которая
+            # ждёт SOAP-формат {"RegisteredObject": [...]} и тихо
+            # выбрасывает всё остальное. Оборачиваем.
+            "AvatarList": _reg(avatar_list),
+            "Content": _reg([]),
+            "Children": _reg(children),
+            "MyThankaList": _reg(my_thanka_list),
+            "MySubscribeList": _reg([]),
+            "DocumentsParts": _reg([]),
+            "LinksTo": _reg([]),
+            "LinksFrom": _reg([]),
+            "LinksSectors": _reg([]),
+            "Elements": _reg([]),
             "LocationEvent": [{"Name": ""}, {"Name": ""}, {"Name": ""}],
-            "Notifications": [],
-            "SiteList": [],
+            "Notifications": _reg([]),
+            "SiteList": _reg([]),
             "Style": "",
             "ChildrenImage": {},
             "DocImage": {},
@@ -277,19 +280,19 @@ class LocalCogiAdapter:
             "Object": {"Type": "site", "Description": "", "Name": "КОГИТЕКА"},
             "MainPage": {"ID": site_id, "Url": ""},
             "Removed": False,
-            "AvatarList": avatar_list,
-            "Content": [],
-            "Children": [],
-            "MyThankaList": [],
-            "MySubscribeList": [],
-            "DocumentsParts": [],
-            "LinksTo": [],
-            "LinksFrom": [],
-            "LinksSectors": [],
-            "Elements": [],
+            "AvatarList": _reg(avatar_list),
+            "Content": _reg([]),
+            "Children": _reg([]),
+            "MyThankaList": _reg([]),
+            "MySubscribeList": _reg([]),
+            "DocumentsParts": _reg([]),
+            "LinksTo": _reg([]),
+            "LinksFrom": _reg([]),
+            "LinksSectors": _reg([]),
+            "Elements": _reg([]),
             "LocationEvent": [{"Name": ""}, {"Name": ""}, {"Name": ""}],
-            "Notifications": [],
-            "SiteList": [],
+            "Notifications": _reg([]),
+            "SiteList": _reg([]),
             "Style": "",
             "ChildrenImage": {},
             "DocImage": {},
@@ -420,7 +423,9 @@ class LocalCogiAdapter:
             """,
             (login,),
         )
-        return {"List": rows}
+        # normalize_list_response в роутере пропускает List через registered(),
+        # которая ожидает SOAP-формат.
+        return {"List": _reg(rows)}
 
     def _h_remove_thanka(self, params: dict) -> dict:
         thanka_id = str(params.get("Id") or "")
@@ -707,3 +712,13 @@ def _json_dumps(obj: Any) -> str:
     import json
 
     return json.dumps(obj, ensure_ascii=False)
+
+
+def _reg(items: list) -> dict:
+    """Оборачивает список в SOAP-формат {"RegisteredObject": [...]}.
+
+    Этого формата ожидает backend.shared.utils.utils.registered(), через
+    которую проходят все коллекции в normalize_get_thanka_result.
+    Без оборачивания любой список превращается в [].
+    """
+    return {"RegisteredObject": items or []}

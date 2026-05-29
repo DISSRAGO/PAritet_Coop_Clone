@@ -218,19 +218,31 @@ class LocalCogiAdapter:
             my_thanka_list = self._my_thanka_rows(login=login, only_roots=False)
 
         type_name_map = {
-            "avatar": ("Аватар", "аватар", "аватара"),
-            "article": ("Статья", "статью", "статьи"),
+            "avatar":     ("Аватар",       "аватар",     "аватара"),
+            "article":    ("Статья",       "статью",     "статьи"),
+            "site":       ("Страница сайта", "сайт",        "сайта"),
+            "collection": ("Коллекция",    "коллекцию", "коллекции"),
+            "document":   ("Документ",     "документ",  "документа"),
+            "cabinet":    ("Кабинет",      "кабинет",  "кабинета"),
         }
         type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
 
-        # Для ЛЮБОЙ тханки владельца выставляем круг: 1 круг,
-        # минимум 12 секторов или сколько дочек, если больше.
+        # Для ЛЮБОЙ тханки владельца выставляем круги:
+        # «Количество кругов» и «секторов» берём из content (выставляет владелец в редакторе).
+        # Дефолт: 1 круг, 12 секторов (не меньше чем дочек).
         # Пустые сектора при PrivacyLevel=6 кликом ведут в /create.
         if is_owner:
-            circles_num = int(content.get("circles_num") or 0) or 1
-            thanka_obj["CirclesNum"] = circles_num
-            thanka_obj["SectorsNum"] = max(12, len(children))
-            thanka_obj["VisibleElements"] = 0
+            try:
+                circles_num = int(content.get("circles_num") or 0)
+            except (TypeError, ValueError):
+                circles_num = 0
+            try:
+                sectors_num = int(content.get("sectors_num") or 0)
+            except (TypeError, ValueError):
+                sectors_num = 0
+            thanka_obj["CirclesNum"] = circles_num or 1
+            thanka_obj["SectorsNum"] = max(sectors_num or 12, len(children))
+            thanka_obj["VisibleElements"] = int(content.get("visible_elements") or 0)
             thanka_obj["DocumentPart"] = False
 
         return {
@@ -608,6 +620,19 @@ class LocalCogiAdapter:
         parent_id = defaults.get("parent_id") or content.get("parent_id") or ""
         if parent_id:
             content["parent_id"] = str(parent_id)
+
+        # Конфиг круга — CirclesNum/SectorsNum/VisibleElements фронт шлёт в Thanka.
+        if isinstance(thanka, dict):
+            for src_key, dst_key in (
+                ("CirclesNum",      "circles_num"),
+                ("SectorsNum",      "sectors_num"),
+                ("VisibleElements", "visible_elements"),
+            ):
+                if thanka.get(src_key) is not None:
+                    try:
+                        content[dst_key] = int(thanka.get(src_key))
+                    except (TypeError, ValueError):
+                        pass
         return content
 
     def _my_thanka_rows(self, login: str, only_roots: bool = False) -> list[dict]:

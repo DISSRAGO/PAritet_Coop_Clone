@@ -841,7 +841,17 @@ function Canvas(props) {
     }
 //?lite=true
     function onClick(e) {
-        
+        console.log("CLICK FIRED " + JSON.stringify({
+            thankaId: data?.Id,
+            mousePosition,
+            sectorAtPos: (mousePosition.circle !== false && mousePosition.sector !== false)
+                ? sectorsArr?.thankaArray?.[mousePosition.circle]?.[mousePosition.sector]
+                : null,
+            isLite,
+            isSite,
+            access,
+            mainId,
+        }));
         let address = "";
         if (mousePosition.center && (!isLite || isLite && data.Id != mainId)) {
             if (data.Thanka.DocumentPart == true) {
@@ -868,6 +878,7 @@ function Canvas(props) {
                 address = "/navigator/" + sectorsArr.thankaArray[i][j].URL;
             }
         }
+        console.log("CLICK FINAL ADDRESS " + JSON.stringify({ address, isLite, isSite }));
         if (address != "") {
             if (isLite && !isSite) {
                 address += "?lite=true"

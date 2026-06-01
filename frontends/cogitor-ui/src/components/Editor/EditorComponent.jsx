@@ -392,6 +392,19 @@ function EditorInner(props) {
     //отправляем
     function FormSubmittionHandler(buttonType) {
 
+        // Ранняя отладка: видно, что клик дошёл до обработчика (до всех условий).
+        // Если этой строки нет в консоли — значит кнопка не привязана / bundle не пересобран.
+        try {
+            console.log("FORM SUBMIT START", {
+                buttonType,
+                checkedURL,
+                editorType: props.type,
+                selectedType,
+                customURL,
+                name: (nameref && nameref.current && (nameref.current.value !== undefined ? nameref.current.value : nameref.current)),
+            })
+        } catch (e) { /* no-op */ }
+
         dataToEditor.EditorType = props.type;
         dataToEditor.UserId = auth.id;
         dataToEditor.UserLogin = auth.login;
@@ -583,6 +596,13 @@ function EditorInner(props) {
                 setSystemMessageStatus("error")
             })
         } else {
+            // Видно в консоли, почему submit заблокирован.
+            console.log("SUBMIT THANKA BLOCKED", {
+                reason: dataToEditor.Thanka.Name == "" ? "empty_name" : (!checkedURL ? "url_not_checked" : "unknown"),
+                name: dataToEditor.Thanka.Name,
+                checkedURL,
+                customURL,
+            })
             if (dataToEditor.Thanka.Name == "") {
                 setSystemMessageText("Введите название");
                 setSystemMessageStatus("error")

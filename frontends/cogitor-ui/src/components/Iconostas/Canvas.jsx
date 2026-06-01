@@ -496,20 +496,28 @@ function Sectors(props) {
         radius[i] = radius[i - 1] + sectDist;
     }
 
-    const [sectors, setSectors] = useState(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
+    // sectors через useMemo, а не useState: useState порождал рассинхрон
+    // между sectorsArr (новый, c=4) и sectors (старый, c=1) при ре-рендере.
+    // useEffect отрисовки падал на sectors[1][0] = undefined.
+    // useMemo синхронно пересчитывает sectors при смене sectorsArr или w.
+    const sectors = useMemo(
+        () => generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w),
+        [w, sectorsArr]
+    );
 
-    // Пересоздаём sectors при изменении размеров ИЛИ данных тханки.
+    // Прокидываем sectorsDoubl в родительский Canvas (нужен для hover-эффекта).
     useEffect(() => {
-        setSectors(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
         setSectorsDoubl(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
     }, [w, sectorsArr])
 
     //первая загрузка / перерисовка при смене данных
     useEffect(() => {
+        if (!Sectorsref.current) return;
         const ctxS = Sectorsref.current.getContext('2d');
         ctxS.clearRect(0, 0, w, h);
         for (let i = 0; i < sectorsArr.c; i++) {
             for (let j = 0; j < narr[i]; j++) {
+                if (!sectors[i] || !sectors[i][j]) continue;
                 ctxS.lineWidth = 3;
                 ctxS.strokeStyle = strokeColour;
                 sectors[i][j].fillPatternImage.onload = function () {
@@ -522,14 +530,16 @@ function Sectors(props) {
                 }
             }
         }
-    },[sectorsArr])
+    },[sectors])
 
     //все остальные
     useEffect(() => {
+        if (!Sectorsref.current) return;
         const ctxS = Sectorsref.current.getContext('2d');
         ctxS.clearRect(0, 0, w, h);
         for (let i = 0; i < sectorsArr.c; i++) {
             for (let j = 0; j < narr[i]; j++) {
+                if (!sectors[i] || !sectors[i][j]) continue;
                 ctxS.lineWidth = 3;
                 ctxS.strokeStyle = strokeColour;
                 //sectors[i][j].fillPatternImage.onload = function () {
@@ -808,6 +818,7 @@ function Canvas(props) {
 
         for (let i = 0; i < narr.length; i++) {
             for (let j = 0; j < narr[i]; j++) {
+                if (!sectors[i] || !sectors[i][j]) continue;
                 if (teta > sectors[i][j].startAngle && teta < sectors[i][j].endAngle && R > sectors[i][j].startRadius && R < sectors[i][j].endRadius) {
                     console.log("HOVER SECTOR", {
                         thankaId: data?.Id,
@@ -826,7 +837,9 @@ function Canvas(props) {
                         }
                         if (mousePosition.circle !== selectedSector.circle || mousePosition.sector !== selectedSector.sector) { 
                             ctx.clearRect(0, 0, size.w, size.h)
-                            OneSectorBig(ctx, sectorsDoubl[i][j], size.w, size.h, narr[i]);
+                            if (sectorsDoubl?.[i]?.[j]) {
+                                OneSectorBig(ctx, sectorsDoubl[i][j], size.w, size.h, narr[i]);
+                            }
                             setSector({circle: i, sector: j})
                             if (sectorsArr.thankaArray[i][j].Id != 0 && sectorsArr.thankaArray[i][j].Id != -1) {
                                 getPreview(

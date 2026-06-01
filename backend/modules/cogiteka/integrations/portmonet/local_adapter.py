@@ -519,6 +519,7 @@ class LocalCogiAdapter:
             LEFT JOIN author a ON a.author_id = t.author_id
             LEFT JOIN avatar av ON av.author_id = a.author_id
             WHERE av.login = %s
+              AND t.status <> 'deleted'
             ORDER BY t.created_at DESC
             LIMIT 200
             """,
@@ -547,12 +548,16 @@ class LocalCogiAdapter:
         lookup = url.lstrip("@")
         if not lookup:
             return {"result": False, "Result": False}
+        # custom_url хранится в cogobject.current_content (jsonb), а не в
+        # колонке thanka — иначе бы SELECT падал 500-кой при каждой проверке
+        # адреса в форме создания тханки. status фильтруем по таблице thanka.
         rows = _q(
             """
             SELECT 1
-              FROM thanka
-             WHERE LOWER(custom_url) = LOWER(%s)
-               AND status <> 'deleted'
+              FROM cogobject co
+              JOIN thanka t ON t.thanka_id = co.thanka_id
+             WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
+               AND t.status <> 'deleted'
              LIMIT 1
             """,
             (lookup,),

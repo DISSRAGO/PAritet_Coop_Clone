@@ -525,8 +525,30 @@ class LocalCogiAdapter:
         return {"Id": thanka_id}
 
     def _h_check_custom_url(self, params: dict) -> dict:
-        # MVP: всегда свободно
-        return {"Result": True}
+        # Проверяем, занят ли адрес. Семантика (как на cogi.teka.ru):
+        #   true  → адрес ЗАНЯТ
+        #   false → адрес СВОБОДЕН
+        # Фронт читает result.data.result (lowercase), но на всякий
+        # случай отдаём оба регистра, чтобы PHP-эра и новый код вели себя одинаково.
+        url = str(params.get("url") or "").strip()
+        if not url:
+            return {"result": False, "Result": False}
+        # Аватары идут с ведущим '@' — ищем по custom_url без префикса.
+        lookup = url.lstrip("@")
+        if not lookup:
+            return {"result": False, "Result": False}
+        rows = _q(
+            """
+            SELECT 1
+              FROM thanka
+             WHERE LOWER(custom_url) = LOWER(%s)
+               AND status <> 'deleted'
+             LIMIT 1
+            """,
+            (lookup,),
+        )
+        taken = bool(rows)
+        return {"result": taken, "Result": taken}
 
     def _h_get_cabinet_by_user(self, params: dict) -> dict:
         """

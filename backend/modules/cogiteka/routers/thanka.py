@@ -278,7 +278,6 @@ def thanka_url_parser(url: str, user: dict, host: str = "") -> dict[str, str]:
             root_target = resolve_root_target_by_host(host)
             thanka_id = str(root_target.get("Id", "")) if root_target.get("Id") else ""
             site_id = str(root_target.get("SiteId", "")) if root_target.get("SiteId") else ""
-        print("URL_PARSER_ROOT", {"host": host, "Id": thanka_id, "SiteId": site_id})
     else:
         address = url.split("/")
         if address and address[0] == "":
@@ -622,13 +621,7 @@ async def get_thanka_endpoint(request: Request):
     thanka_id = parsed_address.get("Id", "")
     site_id = parsed_address.get("SiteId", "")
 
-    print("GET_THANKA_DEBUG user=", user)
-    print("GET_THANKA_DEBUG host=", request_host)
-    print("GET_THANKA_DEBUG raw_address=", raw_address)
-    print("GET_THANKA_DEBUG parsed_address=", parsed_address)
-    
     if not thanka_id and not site_id:
-        print("GET_THANKA_DEBUG no thanka_id and no site_id")
         return json_response(
             build_thanka_stub(
                 thanka_id=thanka_id,
@@ -654,11 +647,7 @@ async def get_thanka_endpoint(request: Request):
         "SiteId": site_id,
     }
 
-    print("GET_THANKA_DEBUG method=", method)
-    print("GET_THANKA_DEBUG params=", params)
-
     ad = cogi_adapter()
-    ad.debug = True
     res = ad.execute(method, params)
 
     error = getattr(res, "Error", None)
@@ -668,14 +657,6 @@ async def get_thanka_endpoint(request: Request):
     status = getattr(res, "Status", None)
     soap_xml = getattr(res, "SoapXML", None)
     soap_fault = getattr(res, "SoapFault", None)
-
-    print("GET_THANKA_DEBUG adapter_error=", error)
-    print("GET_THANKA_DEBUG adapter_result=", result)
-    print("GET_THANKA_DEBUG removed=", removed)
-    print("GET_THANKA_DEBUG status=", status)
-    print("GET_THANKA_DEBUG fault=", soap_fault)
-    print("GET_THANKA_DEBUG soap_request=", getattr(soap_xml, "Request", None))
-    print("GET_THANKA_DEBUG soap_response=", getattr(soap_xml, "Response", None))
 
     if error or removed is True or result_dict == {}:
         return json_response(
@@ -708,23 +689,6 @@ async def get_thanka_endpoint(request: Request):
 @router.post("/thanka/setThanka.php")  # legacy alias
 async def set_thanka_endpoint(request: Request):
     data, files = await read_request_data(request)
-    # Отладочный лог СЫРОГО payload от фронта — до build_nested_thanka_form,
-    # чтобы видеть точно что пришло (JSON / multipart / bracket).
-    try:
-        import json as _json
-        keys = sorted(list(data.keys()))
-        print(
-            "SET_THANKA_DEBUG content_type=", request.headers.get("content-type", ""),
-            " keys=", keys,
-            " Thanka_type=", type(data.get("Thanka")).__name__,
-            " Thanka_dump=", _json.dumps(data.get("Thanka"), ensure_ascii=False, default=str)[:500],
-            " Object_dump=", _json.dumps(data.get("Object"), ensure_ascii=False, default=str)[:500],
-            " EditorType=", data.get("EditorType"),
-            " ParentId=", data.get("ParentId"),
-            flush=True,
-        )
-    except Exception as _exc:
-        print("SET_THANKA_DEBUG print_error=", _exc, flush=True)
     data = build_nested_thanka_form(data)
 
     ad = cogi_adapter()
@@ -828,7 +792,6 @@ async def set_thanka_endpoint(request: Request):
                 coords = {"top": 0, "left": 0, "width": 0, "height": 0}
         except (TypeError, ValueError):
             coords = {"top": 0, "left": 0, "width": 0, "height": 0}
-        print("SET_THANKA_PIC", {"id": result_id, "coords": coords, "filename": getattr(files["Picture"], "filename", None)})
         await save_thanka_picture(result_id, files["Picture"], DATA_DIR, coords)
 
     if res.Error:

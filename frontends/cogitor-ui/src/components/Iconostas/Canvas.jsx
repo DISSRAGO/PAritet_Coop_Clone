@@ -878,9 +878,15 @@ function Canvas(props) {
         // (тонкие сектора, курсор выскакивает за radius[c]). Поэтому
         // используем selectedSector как fallback — он хранит последний
         // сектор над которым был ховер.
+        // Ветка с ci/si работает только если клик *не* в центр и *не* по элементу.
+        // Иначе клик в центр перебивался веткой navigate("/create"):
+        // центр попадал в ci=0/si=0 (cell.Id=0) и вместо возврата к родителю
+        // открывался редактор создания тханки. Канон: центр — всегда возврат.
         let ci = mousePosition.circle !== false ? mousePosition.circle : selectedSector.circle;
         let si = mousePosition.sector !== false ? mousePosition.sector : selectedSector.sector;
-        if (ci !== false && si !== false
+        if (!mousePosition.center
+            && mousePosition.elem === false
+            && ci !== false && si !== false
             && sectorsArr.thankaArray[ci]
             && sectorsArr.thankaArray[ci][si]) {
             const cell = sectorsArr.thankaArray[ci][si];
@@ -889,7 +895,6 @@ function Canvas(props) {
                 // redux store с текущей data сохраняется, EditorComponent берёт
                 // ParentId = data.Id (текущая тханка). Это канонический способ
                 // создать дочь текущей тханки из пустого сектора.
-                console.log("CLICK → /create", { parentId: data?.Id });
                 navigate("/create", { state: { data } });
                 return;
             }
@@ -897,7 +902,6 @@ function Canvas(props) {
                 address = "/navigator/" + cell.URL;
             }
         }
-        console.log("CLICK FINAL ADDRESS " + JSON.stringify({ address, isLite, isSite }));
         if (address != "") {
             if (isLite && !isSite) {
                 address += "?lite=true"

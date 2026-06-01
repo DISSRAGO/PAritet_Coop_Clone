@@ -245,6 +245,15 @@ class LocalCogiAdapter:
             thanka_obj["VisibleElements"] = int(content.get("visible_elements") or 0)
             thanka_obj["DocumentPart"] = False
 
+        # Для тханок типа 'site' фронт (ViewerPage.jsx) читает
+        # data.data.MainPage.ID и data.data.Hash, чтобы подтянуть
+        # CSS-стиль главной страницы. Если их нет — крашится в рендере.
+        top_main_page: dict | bool = False
+        top_hash = ""
+        if obj_type == "site":
+            top_main_page = {"ID": thanka_obj["Id"], "Url": ""}
+            top_hash = str(content.get("hash") or "")
+
         return {
             "Id": thanka_obj["Id"],
             "CabinetId": 0,
@@ -256,6 +265,8 @@ class LocalCogiAdapter:
                 "Description": content.get("description") or "",
                 "Name": thanka_obj["Name"],
             },
+            "MainPage": top_main_page,
+            "Hash": top_hash,
             "Removed": False,
             # Роутер пропускает все коллекции через registered(), которая
             # ждёт SOAP-формат {"RegisteredObject": [...]} и тихо

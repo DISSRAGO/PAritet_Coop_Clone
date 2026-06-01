@@ -101,7 +101,7 @@ function ViewerPage(props) {
     return (
         <>
             <Helmet>
-                <link rel="stylesheet" href={data.data !== null && data.data.Object.Type == 'site' && DIRPATH + "/styles/" + data.data.MainPage.ID + ".css?" + data.data.Hash}></link>
+                <link rel="stylesheet" href={data.data !== null && data.data.Object && data.data.Object.Type == 'site' && data.data.MainPage && data.data.MainPage.ID && DIRPATH + "/styles/" + data.data.MainPage.ID + ".css?" + (data.data.Hash || "")}></link>
             </Helmet>
 
             {!isload && (

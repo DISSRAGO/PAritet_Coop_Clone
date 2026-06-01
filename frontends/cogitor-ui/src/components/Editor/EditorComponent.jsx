@@ -581,23 +581,41 @@ function EditorInner(props) {
 
             axios(axiosCfg).then((result) => {
                 if (result.data != null) {
-                    // Аватары — отдельная ветка с /@login.
+                    // Навигация по канону Cogiteka:
+                    //   avatar  → /@login
+                    //   всё остальное ↑ если есть CustomURL — /CustomURL
+                    //                 иначе fallback /navigator/<UUID> (бэк-резолвер
+                    //                 всё равно найдёт тханку по UUID).
                     if (selectedType == 'avatar' && customURL != "") {
                         window.location.assign("/@" + customURL);
                     }
-                    // Для всех остальных типов всегда навигируем по UUID тханки:
-                    // бэк-резолвер (thanka_url_parser) всё равно сможет найти
-                    // тханку по CustomURL при обращении /navigator/<slug>,
-                    // но UUID гарантированно работает даже если CustomURL не сохранён
-                    // или пуст.
                     else if (result.data.DocPath == "" || result.data.DocPath == undefined) {
+                        // CustomURL из ответа бэка (источник правды) — важно:
+                        // это именно то, что реально сохранилось в БД, а не то, что
+                        // пользователь вводил в форму.
+                        const savedCustomURL = (
+                            (result.data.Thanka && result.data.Thanka.CustomURL) ||
+                            result.data.CustomURL ||
+                            ""
+                        ).toString().trim()
+
                         if (dataToEditor.Id == "") {
+                            // create / createsite / add
                             if (type == "add" && selectedType != "link" && selectedType != "repost") {
                                 addLink(result.data.Id, data.Id)
                             }
-                            window.location.assign("/navigator/" + result.data.Id);
+                            if (savedCustomURL) {
+                                window.location.assign("/" + savedCustomURL);
+                            } else {
+                                window.location.assign("/navigator/" + result.data.Id);
+                            }
                         } else {
-                            window.location.assign("/navigator/" + dataToEditor.Id);
+                            // edit — есть Id редактируемой тханки
+                            if (savedCustomURL) {
+                                window.location.assign("/" + savedCustomURL);
+                            } else {
+                                window.location.assign("/navigator/" + dataToEditor.Id);
+                            }
                         }
                     } else {
                         window.location.assign("/navigator/" + result.data.DocPath);

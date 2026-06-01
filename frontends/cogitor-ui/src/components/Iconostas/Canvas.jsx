@@ -892,7 +892,9 @@ function Canvas(props) {
                 }
                 address = "/navigator" + addr;
             } else {
-                address = '/navigator/' + data.Thanka.ParentId;
+                // Предпочитаем читаемый custom_url родителя, fallback на UUID.
+                const parentUrl = data.Thanka.ParentCustomUrl || data.Thanka.ParentId;
+                address = '/navigator/' + parentUrl;
             }
         }
         if (mousePosition.elem !== false

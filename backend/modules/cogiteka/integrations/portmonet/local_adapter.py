@@ -351,6 +351,24 @@ class LocalCogiAdapter:
         obj = params.get("Object") or {}
         user_login = str(params.get("UserLogin") or params.get("Login") or "")
 
+        # Отладочный лог входящего payload — видно в backend/uvicorn.log
+        try:
+            print(
+                "CREATE_THANKA_DEBUG params=",
+                {
+                    "ParentId":   params.get("ParentId"),
+                    "UserLogin":  user_login,
+                    "EditorType": params.get("EditorType"),
+                    "Thanka.Name":      thanka.get("Name") if isinstance(thanka, dict) else None,
+                    "Thanka.CustomURL": thanka.get("CustomURL") if isinstance(thanka, dict) else None,
+                    "Object.Type":      obj.get("Type") if isinstance(obj, dict) else None,
+                    "Object.Name":      obj.get("Name") if isinstance(obj, dict) else None,
+                },
+                flush=True,
+            )
+        except Exception:
+            pass
+
         # CustomURL используем как осмысленный fallback вместо «Новая тханка»,
         # чтобы тултипы секторов и список тханок не показывали пустую заглушку.
         custom_url_fallback = ""

@@ -515,33 +515,67 @@ function EditorInner(props) {
         }
 
         if (dataToEditor.Thanka.Name != "" && checkedURL) {
-            axios({
-                method: "post",
-                url: PATH + "thanka/setThanka.php",
-                //данные отправятся в $_POST и $_FILES, а то мы не вытащим оттуда картинку
-                headers: { "content-type": "multipart/form-data" },
-                data: dataToEditor,
-            }).then((result) => {
+            // Отладка: видно в консоли браузера, что реально уходит на бэк.
+            console.log("SUBMIT THANKA ", {
+                EditorType: dataToEditor.EditorType,
+                ParentId:   dataToEditor.ParentId,
+                Name:       dataToEditor.Thanka.Name,
+                CustomURL:  dataToEditor.Thanka.CustomURL,
+                Type:       dataToEditor.Object.Type,
+                selectedType,
+            })
+
+            // axios 0.27 не умеет сериализовывать вложенные объекты
+            // (Thanka, Object, ...) в multipart/form-data — они прилетают на бэк
+            // строкой "[object Object]", поэтому все поля формы (Name, Type,
+            // CustomURL, ParentId) терялись, и созданные тханки получали
+            // дефолтные значения («Новая тханка» / type='article').
+            //
+            // Бэк умеет application/json (read_request_data: если content-type
+            // содержит "application/json" — берёт await request.json()), поэтому
+            // при отсутствии файлов отправляем JSON. Если в будущем нужны
+            // файлы — ветка с multipart будет собирать FormData вручную.
+            const hasFile = (
+                (selectedPictureSend && typeof selectedPictureSend !== "string")
+                || (typeof selectedPDF === "object" && selectedPDF !== null)
+            )
+
+            const axiosCfg = hasFile
+                ? {
+                    method: "post",
+                    url: PATH + "thanka/setThanka.php",
+                    headers: { "content-type": "multipart/form-data" },
+                    data: dataToEditor,
+                  }
+                : {
+                    method: "post",
+                    url: PATH + "thanka/setThanka.php",
+                    headers: { "content-type": "application/json" },
+                    data: dataToEditor,
+                  }
+
+            axios(axiosCfg).then((result) => {
                 if (result.data != null) {
-                    if (customURL != "") {
-                        if (selectedType == 'avatar') {
-                            window.location.assign("/@" + customURL);
+                    // Аватары — отдельная ветка с /@login.
+                    if (selectedType == 'avatar' && customURL != "") {
+                        window.location.assign("/@" + customURL);
+                    }
+                    // Для всех остальных типов всегда навигируем по UUID тханки:
+                    // бэк-резолвер (thanka_url_parser) всё равно сможет найти
+                    // тханку по CustomURL при обращении /navigator/<slug>,
+                    // но UUID гарантированно работает даже если CustomURL не сохранён
+                    // или пуст.
+                    else if (result.data.DocPath == "" || result.data.DocPath == undefined) {
+                        if (dataToEditor.Id == "") {
+                            if (type == "add" && selectedType != "link" && selectedType != "repost") {
+                                addLink(result.data.Id, data.Id)
+                            }
+                            window.location.assign("/navigator/" + result.data.Id);
                         } else {
-                            window.location.assign("/" + customURL);
+                            window.location.assign("/navigator/" + dataToEditor.Id);
                         }
                     } else {
-                        if (result.data.DocPath == "") {
-                            if (dataToEditor.Id == "") {
-                                if (type == "add" && selectedType != "link" && selectedType != "repost") {
-                                    addLink(result.data.Id, data.Id)
-                                }
-                                window.location.assign("/navigator/" + result.data.Id);
-                            } else {
-                                window.location.assign("/navigator/" + dataToEditor.Id);
-                            }
-                        } else {
-                            window.location.assign("/navigator/" + result.data.DocPath);
-                        }
+                        window.location.assign("/navigator/" + result.data.DocPath);
                     }
                 }
             }).catch((error) => {

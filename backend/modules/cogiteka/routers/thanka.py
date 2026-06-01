@@ -5,6 +5,7 @@
 # cogiAPI/thanka/methods.php
 
 import re
+import uuid as _uuid
 from types import SimpleNamespace
 from typing import Any
 
@@ -254,6 +255,15 @@ def _resolve_user_cabinet(ad, user: dict) -> str:
     return thanka_id
 
 
+def _is_uuid(s: str) -> bool:
+    """Проверяет что строка — канонический UUID."""
+    try:
+        _uuid.UUID(str(s))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def thanka_url_parser(url: str, user: dict, host: str = "") -> dict[str, str]:
     ad = cogi_adapter()
 
@@ -282,9 +292,23 @@ def thanka_url_parser(url: str, user: dict, host: str = "") -> dict[str, str]:
                 # /navigator/ без суффикса → кабинет пользователя
                 thanka_id = _resolve_user_cabinet(ad, user)
             else:
-                # second может быть UUID, числом или DocumentPath — в любом случае
-                # берём последний сегмент как id.
-                thanka_id = address[-1]
+                # last_seg может быть UUID, числом или CustomURL (DocumentPath).
+                # Если не UUID и не число — резолвим через GetIdByCustomURL,
+                # иначе бэк будет искать тханку по строковому ID и отдавать
+                # «статью» без Children.
+                last_seg = address[-1]
+                if _is_uuid(last_seg) or is_digit(last_seg):
+                    thanka_id = last_seg
+                else:
+                    res = ad.execute("GetIdByCustomURL", {"url": last_seg})
+                    rtype = (res.Result or {}).get("Type")
+                    if rtype == "navigator":
+                        thanka_id = (res.Result or {}).get("Id") or ""
+                    elif rtype == "sitepage":
+                        site_id = (res.Result or {}).get("Id") or ""
+                    else:
+                        # Не разобрали — оставляем как есть, бэк вернёт ошибку/пустоту
+                        thanka_id = last_seg
 
         elif first == "profile":
             thanka_id = _resolve_user_cabinet(ad, user)

@@ -480,7 +480,10 @@ function Sectors(props) {
 
     const { w, h, inR, outR, data, setSectorsDoubl, isLite } = props;
 
-    let sectorsArr = useMemo(() => thankaArrays(data), []);
+    // sectorsArr зависит от data: дети родителя могут прийти позже, чем первый
+    // рендер. Если оставить deps=[], useMemo навсегда замораживает пустой
+    // массив, и при возврате к родителю сектора остаются пустыми до hard refresh.
+    let sectorsArr = useMemo(() => thankaArrays(data), [data]);
     let narr = sectorsArr.narr;
     let c = sectorsArr.c;
     let radius = [];
@@ -495,14 +498,16 @@ function Sectors(props) {
 
     const [sectors, setSectors] = useState(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
 
+    // Пересоздаём sectors при изменении размеров ИЛИ данных тханки.
     useEffect(() => {
         setSectors(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
         setSectorsDoubl(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
-    }, [w])
+    }, [w, sectorsArr])
 
-    //первая загрузка
+    //первая загрузка / перерисовка при смене данных
     useEffect(() => {
         const ctxS = Sectorsref.current.getContext('2d');
+        ctxS.clearRect(0, 0, w, h);
         for (let i = 0; i < sectorsArr.c; i++) {
             for (let j = 0; j < narr[i]; j++) {
                 ctxS.lineWidth = 3;
@@ -510,13 +515,19 @@ function Sectors(props) {
                 sectors[i][j].fillPatternImage.onload = function () {
                     OneSector(ctxS, sectors[i][j], w, h);
                 }
+                // Если картинка уже закэширована (complete=true), onload не
+                // выстрелит — рисуем сразу.
+                if (sectors[i][j].fillPatternImage.complete) {
+                    OneSector(ctxS, sectors[i][j], w, h);
+                }
             }
         }
-    },[])
+    },[sectorsArr])
 
     //все остальные
     useEffect(() => {
         const ctxS = Sectorsref.current.getContext('2d');
+        ctxS.clearRect(0, 0, w, h);
         for (let i = 0; i < sectorsArr.c; i++) {
             for (let j = 0; j < narr[i]; j++) {
                 ctxS.lineWidth = 3;
@@ -603,8 +614,10 @@ function Canvas(props) {
 
     const navigate = useNavigate();
 
-    let arr = useMemo(() => Elements(props, imgDim, size.w, size.h), [size.w, size.h]);
-    let sectorsArr = useMemo(() => thankaArrays(data), []);
+    let arr = useMemo(() => Elements(props, imgDim, size.w, size.h), [size.w, size.h, data]);
+    // sectorsArr зависит от data (см. комментарий в Sectors): дети могут
+    // подгрузиться позже первого рендера Viewer'а — нельзя кэшировать навсегда.
+    let sectorsArr = useMemo(() => thankaArrays(data), [data]);
     let narr = sectorsArr.narr;
     let c = sectorsArr.c;
 
@@ -645,7 +658,7 @@ function Canvas(props) {
             }
         }
         setSectors(sectors)
-    },[size])
+    },[size, c, sectorsArr])
 
     const [sectorsDoubl, setSectorsDoubl] = useState(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, c, size.w))
 
@@ -689,7 +702,7 @@ function Canvas(props) {
                 }
             }
         }
-    }, [])
+    }, [arr])
 
     //ресайз
     useEffect(() => {

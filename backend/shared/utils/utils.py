@@ -28,21 +28,23 @@ async def read_request_data(request: Request) -> tuple[dict[str, Any], dict[str,
     for key, value in form.multi_items():
         if isinstance(value, UploadFile):
             files[key] = value
+            continue
+
+        # axios 0.27 в multipart/form-data сериализует вложенные объекты
+        # либо как Thanka[Name] (bracket-notation), либо как Thanka.Name
+        # (dot-notation, фактически используется именно она — см. payload
+        # с фронта). Поддерживаем оба варианта и плюс одноуровневый
+        # синоним Thanka_Name для обратной совместимости с
+        # build_nested_thanka_form / устаревшими PHP-роутами.
+        m = re.match(r"^([A-Za-z_]\w*)[\.\[]([^\]\.]+)\]?$", key)
+        if m:
+            parent, child = m.group(1), m.group(2)
+            bucket = data.setdefault(parent, {})
+            if isinstance(bucket, dict):
+                bucket[child] = value
+            data.setdefault(f"{parent}_{child}", value)
         else:
-            # axios в multipart/form-data сериализует вложенные объекты как
-            # Thanka[Name], PictureCoords[top]. Раскладываем в dict и
-            # дополнительно кладём плоский ключ с _ (для обратной
-            # совместимости с build_nested_thanka_form).
-            m = re.match(r"^([A-Za-z_]\w*)\[([^\]]+)\]$", key)
-            if m:
-                parent, child = m.group(1), m.group(2)
-                bucket = data.setdefault(parent, {})
-                if isinstance(bucket, dict):
-                    bucket[child] = value
-                # и синоним с подчёркиванием
-                data.setdefault(f"{parent}_{child}", value)
-            else:
-                data[key] = value
+            data[key] = value
 
     return data, files
 

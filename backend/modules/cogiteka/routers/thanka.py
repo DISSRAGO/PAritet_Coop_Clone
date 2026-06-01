@@ -708,6 +708,23 @@ async def get_thanka_endpoint(request: Request):
 @router.post("/thanka/setThanka.php")  # legacy alias
 async def set_thanka_endpoint(request: Request):
     data, files = await read_request_data(request)
+    # Отладочный лог СЫРОГО payload от фронта — до build_nested_thanka_form,
+    # чтобы видеть точно что пришло (JSON / multipart / bracket).
+    try:
+        import json as _json
+        keys = sorted(list(data.keys()))
+        print(
+            "SET_THANKA_DEBUG content_type=", request.headers.get("content-type", ""),
+            " keys=", keys,
+            " Thanka_type=", type(data.get("Thanka")).__name__,
+            " Thanka_dump=", _json.dumps(data.get("Thanka"), ensure_ascii=False, default=str)[:500],
+            " Object_dump=", _json.dumps(data.get("Object"), ensure_ascii=False, default=str)[:500],
+            " EditorType=", data.get("EditorType"),
+            " ParentId=", data.get("ParentId"),
+            flush=True,
+        )
+    except Exception as _exc:
+        print("SET_THANKA_DEBUG print_error=", _exc, flush=True)
     data = build_nested_thanka_form(data)
 
     ad = cogi_adapter()

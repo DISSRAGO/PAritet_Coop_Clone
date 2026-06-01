@@ -179,6 +179,22 @@ class LocalCogiAdapter:
         obj_type = content.get("type") or ("avatar" if is_cabinet else "article")
         custom_url = content.get("custom_url") or ""
 
+        # Резолвим parent_id в ParentId / ParentName — это источник правды
+        # для клика в центр (Canvas.jsx ведёт на /navigator/<ParentId>).
+        # Для кабинетных тханок parent_id пуст — это корень дерева.
+        parent_id = "" if is_cabinet else str(content.get("parent_id") or "").strip()
+        parent_name = ""
+        if parent_id:
+            prows = _q(
+                "SELECT title FROM thanka WHERE thanka_id::text = %s LIMIT 1",
+                (parent_id,),
+            )
+            if prows:
+                parent_name = prows[0]["title"] or ""
+            else:
+                # родитель исчез (удалён) — обнуляем, чтобы не вести на битую ссылку
+                parent_id = ""
+
         thanka_obj = {
             "Id": (row["id"] if row else thanka_id) or "",
             "Name": (row["name"] if row else (login or "КОГИТЕКА")),
@@ -186,8 +202,8 @@ class LocalCogiAdapter:
             "Privacy": int(content.get("privacy") or 1),
             "Comments": False,
             "MainPage": False,
-            "ParentId": "",
-            "ParentName": "",
+            "ParentId": parent_id,
+            "ParentName": parent_name,
             "Author": (row["author_id"] if row else author_id) or author_id,
             "AuthorName": login,
             "CustomURL": custom_url,

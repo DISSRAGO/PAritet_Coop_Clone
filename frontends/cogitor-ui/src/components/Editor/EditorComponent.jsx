@@ -281,10 +281,22 @@ function EditorInner(props) {
     const annotationRef = useRef(type == 'edit' ? data.Thanka.Annotation : '');
 
     //выбор типа. Тут массив, поэтому такие огороды нагорожены, иначе не отправляет.
-    const [selectedType, setSelectedType] = useState(type == 'edit' ? (data.SectorLink != undefined && data.Object.Type != "repost" ? "link" : data.Object.Type) : GetTypeByParentType(data.Object.Type));
+    // Гарантируем непустой дефолт: если GetTypeByParentType вернёт undefined/null —
+    // падаем в «article». Это убирает симптом «Object.Type='' прилетает на бэк».
+    const [selectedType, setSelectedType] = useState(
+        (type == 'edit'
+            ? (data.SectorLink != undefined && data.Object.Type != "repost" ? "link" : data.Object.Type)
+            : GetTypeByParentType(data.Object.Type)
+        ) || "article"
+    );
 
-    //имя тханки, с ним все понятно: редактирование - старое, создание - пустое.
-    const nameref = useRef(type == 'edit' ? data.Thanka.Name : '');
+    //имя тханки. Раньше был хрупкий useRef с onChange-присваиванием
+    // в .current (и невалидным пропсом refs={...}) — приводило к тому,
+    // что в бэк уходила пустая строка в Thanka.Name. Переводим на нормальное useState.
+    const [name, setName] = useState(type == 'edit' ? (data.Thanka.Name || '') : '');
+    // nameref остаётся для обратной совместимости с остальным кодом, но синхронизируется из state.
+    const nameref = useRef(type == 'edit' ? (data.Thanka.Name || '') : '');
+    nameref.current = name;
 
     //количество секторов, все понятно
     const [selectedSectors, setSelectedSectors] = useState(type == 'edit' ? data.Thanka.SectorsNum : 12);
@@ -649,9 +661,9 @@ function EditorInner(props) {
                             <p>Название: </p>
                         }
 
-                        <input onChange={(e) => nameref.current = e.target.value}
-                            defaultValue={type == 'edit' ? data.Thanka.Name : ''}
-                            refs={nameref}
+                        <input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             disabled={selectedType == "hashtag" ? 'disabled' : ""}
                         />
 
@@ -740,7 +752,12 @@ function EditorInner(props) {
                 ) : (
                     <>
                         {(((data.PrivacyLevel === 6 || data.PrivacyLevel === 5 || data.PrivacyLevel === 3) && (type == 'add' || type == 'create')) || type == 'edit' ) && (
-                            <button type="submit" onClick={() => FormSubmittionHandler("create")}> Сохранить </button>
+                            <button
+                                type="submit"
+                                onClick={() => FormSubmittionHandler("create")}
+                                disabled={!name || name.trim() === ""}
+                                title={!name || name.trim() === "" ? "Введите название тханки" : ""}
+                            > Сохранить </button>
                         )}
                     </>
                 )}

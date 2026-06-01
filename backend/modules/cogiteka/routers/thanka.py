@@ -752,6 +752,15 @@ async def set_thanka_endpoint(request: Request):
 
     elif editor_type in ("createsite", "create", "add"):
         res = ad.execute("CreateThanka", data)
+        # Если адаптер вернул Error=True (напр. ValueError: Thanka.Name is required),
+        # не продолжаем и не навигируем никуда — отдаём 400 с понятным текстом,
+        # чтобы фронт вывел «Произошла ошибка» из catch вместо навигации на /navigator/undefined.
+        if getattr(res, "Error", False):
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=(getattr(res, "Status", None) and res.Status.Text) or "create_thanka_failed",
+            )
         result = res.Result
         result_id = result.get("Id")
 

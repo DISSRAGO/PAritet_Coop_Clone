@@ -369,21 +369,31 @@ class LocalCogiAdapter:
         except Exception:
             pass
 
-        # CustomURL используем как осмысленный fallback вместо «Новая тханка»,
-        # чтобы тултипы секторов и список тханок не показывали пустую заглушку.
+        # CustomURL используем как fallback только в крайнем случае (кабинетные
+        # тханки и прочие служебные, где Name осознанно равен ''),
+        # но НЕ в обычном create от пользователя.
         custom_url_fallback = ""
         if isinstance(thanka, dict):
             custom_url_fallback = str(thanka.get("CustomURL") or "").strip()
         if not custom_url_fallback and isinstance(obj, dict):
             custom_url_fallback = str(obj.get("CustomURL") or "").strip()
 
-        title = (
-            (thanka.get("Name") if isinstance(thanka, dict) else None)
-            or (obj.get("Name") if isinstance(obj, dict) else None)
-            or custom_url_fallback
-            or "Новая тханка"
-        )
-        title = str(title).strip() or custom_url_fallback or "Новая тханка"
+        # Явный Name из формы — единственный источник правды для title.
+        raw_name = (thanka.get("Name") if isinstance(thanka, dict) else None) \
+                   or (obj.get("Name") if isinstance(obj, dict) else None) \
+                   or ""
+        raw_name = str(raw_name).strip()
+
+        is_cabinet = bool(isinstance(thanka, dict) and thanka.get("IsCabinet"))
+
+        # Отказываемся создавать пользовательскую тханку без явного Name.
+        # Это ключевая защита от зомби-тханок «Новая тханка», которые плодились при
+        # каждом клике «Сохранить» с пустым именем. Кабинетные тханки и системные
+        # вызовы с IsCabinet=true проходят через fallback.
+        if not raw_name and not is_cabinet:
+            raise ValueError("Thanka.Name is required")
+
+        title = raw_name or custom_url_fallback or "Новая тханка"
 
         # ParentId прилетает из фронта при создании дочки из сектора
         # родительской тханки. Сохраняем в cogobject.current_content->>'parent_id'

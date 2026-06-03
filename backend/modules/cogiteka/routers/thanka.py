@@ -689,32 +689,6 @@ async def get_thanka_endpoint(request: Request):
 @router.post("/thanka/setThanka.php")  # legacy alias
 async def set_thanka_endpoint(request: Request):
     data, files = await read_request_data(request)
-    # DEBUG: убрать после фикса картинок
-    _ct = request.headers.get("content-type", "")
-    print(
-        f"[setThanka DEBUG] content-type={_ct!r} "
-        f"data_keys={sorted(list(data.keys()))} "
-        f"files_keys={list(files.keys())}",
-        flush=True,
-    )
-    if "Picture" in files:
-        _up = files["Picture"]
-        print(
-            f"[setThanka DEBUG] Picture(file): filename={_up.filename!r} "
-            f"content_type={_up.content_type!r}",
-            flush=True,
-        )
-    if "Picture" in data:
-        _pv = data["Picture"]
-        _repr = repr(_pv)
-        if len(_repr) > 200:
-            _repr = _repr[:200] + "..."
-        print(
-            f"[setThanka DEBUG] Picture(data): type={type(_pv).__name__} "
-            f"len={len(_pv) if hasattr(_pv, '__len__') else 'n/a'} "
-            f"repr={_repr}",
-            flush=True,
-        )
     data = build_nested_thanka_form(data)
 
     ad = cogi_adapter()

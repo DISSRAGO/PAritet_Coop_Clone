@@ -700,8 +700,19 @@ async def set_thanka_endpoint(request: Request):
     if "Picture" in files:
         _up = files["Picture"]
         print(
-            f"[setThanka DEBUG] Picture: filename={_up.filename!r} "
+            f"[setThanka DEBUG] Picture(file): filename={_up.filename!r} "
             f"content_type={_up.content_type!r}",
+            flush=True,
+        )
+    if "Picture" in data:
+        _pv = data["Picture"]
+        _repr = repr(_pv)
+        if len(_repr) > 200:
+            _repr = _repr[:200] + "..."
+        print(
+            f"[setThanka DEBUG] Picture(data): type={type(_pv).__name__} "
+            f"len={len(_pv) if hasattr(_pv, '__len__') else 'n/a'} "
+            f"repr={_repr}",
             flush=True,
         )
     data = build_nested_thanka_form(data)

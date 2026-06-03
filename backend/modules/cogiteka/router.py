@@ -1,7 +1,10 @@
 from fastapi import APIRouter
 
 from backend.modules.cogiteka.routers.auth import router as auth_router
-from backend.modules.cogiteka.routers.subject import router as subject_router
+from backend.modules.cogiteka.routers.subject import (
+    router as subject_router,
+    subject_app_router,
+)
 from backend.modules.cogiteka.routers import (
     community,
     files,
@@ -18,6 +21,7 @@ cogi_router = APIRouter(prefix="/api", tags=["cogi"])
 
 cogi_router.include_router(auth_router)
 cogi_router.include_router(subject_router)
+cogi_router.include_router(subject_app_router)
 cogi_router.include_router(users.router)
 cogi_router.include_router(community.router)
 cogi_router.include_router(location.router)

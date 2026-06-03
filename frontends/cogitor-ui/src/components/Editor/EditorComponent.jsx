@@ -548,19 +548,6 @@ function EditorInner(props) {
             // Request_Fields, файл — отдельным полем Picture. Бэк через
             // build_nested_thanka_form собирает вложенные dict-ы обратно.
             let axiosCfg
-            // DEBUG: убрать после фикса картинок
-            // eslint-disable-next-line no-console
-            console.log(
-                "[setThanka DEBUG] hasFile=", hasFile,
-                "selectedPictureSend=", selectedPictureSend,
-                "typeof=", typeof selectedPictureSend,
-                "isFile=", selectedPictureSend instanceof File,
-                "isBlob=", selectedPictureSend instanceof Blob,
-                "ctor=", selectedPictureSend && selectedPictureSend.constructor && selectedPictureSend.constructor.name,
-                "name=", selectedPictureSend && selectedPictureSend.name,
-                "size=", selectedPictureSend && selectedPictureSend.size,
-                "keys=", selectedPictureSend && typeof selectedPictureSend === 'object' ? Object.keys(selectedPictureSend) : null
-            )
             if (hasFile) {
                 const fd = new FormData()
                 const appendFlat = (prefix, obj) => {
@@ -605,17 +592,6 @@ function EditorInner(props) {
                 if (typeof selectedPDF === "object" && selectedPDF !== null) {
                     fd.append("PDF", selectedPDF)
                 }
-                // DEBUG: убрать после фикса картинок
-                // eslint-disable-next-line no-console
-                const _pe = fd.get("Picture")
-                console.log(
-                    "[setThanka DEBUG] FormData keys:", Array.from(fd.keys()),
-                    "hasPicture=", fd.has("Picture"),
-                    "pictureEntry=", _pe,
-                    "pictureEntry isFile=", _pe instanceof File,
-                    "pictureEntry isBlob=", _pe instanceof Blob,
-                    "pictureEntry typeof=", typeof _pe
-                )
                 axiosCfg = {
                     method: "post",
                     url: PATH + "thanka/setThanka.php",

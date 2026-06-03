@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.modules.cogiteka.router import cogi_router
 from backend.modules.cogiteka.routers.request import request_router
 from backend.modules.cogiteka.site_router import site_router
+from backend.modules.homonet.router import homonet_router
 from backend.shared.db import close_db_pool, init_db_pool
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -55,6 +56,7 @@ async def root():
     }
 
 
+app.include_router(homonet_router)
 app.include_router(cogi_router)
 app.include_router(site_router)
 app.include_router(request_router)

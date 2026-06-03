@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useActions } from '../../hooks/useActions';
 import { DIRPATH } from "../../utils/url.js";
 import { useMediaQuery } from 'react-responsive'
@@ -479,7 +480,10 @@ function Sectors(props) {
 
     const { w, h, inR, outR, data, setSectorsDoubl, isLite } = props;
 
-    let sectorsArr = useMemo(() => thankaArrays(data), []);
+    // sectorsArr зависит от data: дети родителя могут прийти позже, чем первый
+    // рендер. Если оставить deps=[], useMemo навсегда замораживает пустой
+    // массив, и при возврате к родителю сектора остаются пустыми до hard refresh.
+    let sectorsArr = useMemo(() => thankaArrays(data), [data]);
     let narr = sectorsArr.narr;
     let c = sectorsArr.c;
     let radius = [];
@@ -492,32 +496,50 @@ function Sectors(props) {
         radius[i] = radius[i - 1] + sectDist;
     }
 
-    const [sectors, setSectors] = useState(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
+    // sectors через useMemo, а не useState: useState порождал рассинхрон
+    // между sectorsArr (новый, c=4) и sectors (старый, c=1) при ре-рендере.
+    // useEffect отрисовки падал на sectors[1][0] = undefined.
+    // useMemo синхронно пересчитывает sectors при смене sectorsArr или w.
+    const sectors = useMemo(
+        () => generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w),
+        [w, sectorsArr]
+    );
 
+    // Прокидываем sectorsDoubl в родительский Canvas (нужен для hover-эффекта).
     useEffect(() => {
-        setSectors(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
         setSectorsDoubl(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, sectorsArr.c, w))
-    }, [w])
+    }, [w, sectorsArr])
 
-    //первая загрузка
+    //первая загрузка / перерисовка при смене данных
     useEffect(() => {
+        if (!Sectorsref.current) return;
         const ctxS = Sectorsref.current.getContext('2d');
+        ctxS.clearRect(0, 0, w, h);
         for (let i = 0; i < sectorsArr.c; i++) {
             for (let j = 0; j < narr[i]; j++) {
+                if (!sectors[i] || !sectors[i][j]) continue;
                 ctxS.lineWidth = 3;
                 ctxS.strokeStyle = strokeColour;
                 sectors[i][j].fillPatternImage.onload = function () {
                     OneSector(ctxS, sectors[i][j], w, h);
                 }
+                // Если картинка уже закэширована (complete=true), onload не
+                // выстрелит — рисуем сразу.
+                if (sectors[i][j].fillPatternImage.complete) {
+                    OneSector(ctxS, sectors[i][j], w, h);
+                }
             }
         }
-    },[])
+    },[sectors])
 
     //все остальные
     useEffect(() => {
+        if (!Sectorsref.current) return;
         const ctxS = Sectorsref.current.getContext('2d');
+        ctxS.clearRect(0, 0, w, h);
         for (let i = 0; i < sectorsArr.c; i++) {
             for (let j = 0; j < narr[i]; j++) {
+                if (!sectors[i] || !sectors[i][j]) continue;
                 ctxS.lineWidth = 3;
                 ctxS.strokeStyle = strokeColour;
                 //sectors[i][j].fillPatternImage.onload = function () {
@@ -600,8 +622,12 @@ function Canvas(props) {
 
     const imgDim = 350;
 
-    let arr = useMemo(() => Elements(props, imgDim, size.w, size.h), [size.w, size.h]);
-    let sectorsArr = useMemo(() => thankaArrays(data), []);
+    const navigate = useNavigate();
+
+    let arr = useMemo(() => Elements(props, imgDim, size.w, size.h), [size.w, size.h, data]);
+    // sectorsArr зависит от data (см. комментарий в Sectors): дети могут
+    // подгрузиться позже первого рендера Viewer'а — нельзя кэшировать навсегда.
+    let sectorsArr = useMemo(() => thankaArrays(data), [data]);
     let narr = sectorsArr.narr;
     let c = sectorsArr.c;
 
@@ -642,7 +668,7 @@ function Canvas(props) {
             }
         }
         setSectors(sectors)
-    },[size])
+    },[size, c, sectorsArr])
 
     const [sectorsDoubl, setSectorsDoubl] = useState(generateShapes(narr, radius, sectorsArr.thankaArray, sectorsArr.images, c, size.w))
 
@@ -686,7 +712,7 @@ function Canvas(props) {
                 }
             }
         }
-    }, [])
+    }, [arr])
 
     //ресайз
     useEffect(() => {
@@ -792,6 +818,7 @@ function Canvas(props) {
 
         for (let i = 0; i < narr.length; i++) {
             for (let j = 0; j < narr[i]; j++) {
+                if (!sectors[i] || !sectors[i][j]) continue;
                 if (teta > sectors[i][j].startAngle && teta < sectors[i][j].endAngle && R > sectors[i][j].startRadius && R < sectors[i][j].endRadius) {
                     console.log("HOVER SECTOR", {
                         thankaId: data?.Id,
@@ -810,7 +837,9 @@ function Canvas(props) {
                         }
                         if (mousePosition.circle !== selectedSector.circle || mousePosition.sector !== selectedSector.sector) { 
                             ctx.clearRect(0, 0, size.w, size.h)
-                            OneSectorBig(ctx, sectorsDoubl[i][j], size.w, size.h, narr[i]);
+                            if (sectorsDoubl?.[i]?.[j]) {
+                                OneSectorBig(ctx, sectorsDoubl[i][j], size.w, size.h, narr[i]);
+                            }
                             setSector({circle: i, sector: j})
                             if (sectorsArr.thankaArray[i][j].Id != 0 && sectorsArr.thankaArray[i][j].Id != -1) {
                                 getPreview(
@@ -841,7 +870,18 @@ function Canvas(props) {
     }
 //?lite=true
     function onClick(e) {
-        
+        console.log("CLICK FIRED " + JSON.stringify({
+            thankaId: data?.Id,
+            mousePosition,
+            selectedSector,
+            sectorAtPos: (mousePosition.circle !== false && mousePosition.sector !== false)
+                ? sectorsArr?.thankaArray?.[mousePosition.circle]?.[mousePosition.sector]
+                : null,
+            isLite,
+            isSite,
+            access,
+            mainId,
+        }));
         let address = "";
         if (mousePosition.center && (!isLite || isLite && data.Id != mainId)) {
             if (data.Thanka.DocumentPart == true) {
@@ -855,15 +895,37 @@ function Canvas(props) {
                 address = '/navigator/' + data.Thanka.ParentId;
             }
         }
-        if (mousePosition.elem !== false) {
+        if (mousePosition.elem !== false
+            && Array.isArray(data.Elements)
+            && data.Elements[mousePosition.elem]) {
             address = '/navigator/' + data.Elements[mousePosition.elem].ID;
         }
-        if (mousePosition.circle !== false && mousePosition.sector !== false) {
-            let i = mousePosition.circle;
-            let j = mousePosition.sector;
-            if (sectorsArr.thankaArray[i][j].Id == 0 && access == true && !isLite) window.location.assign("/create");
-            else if (sectorsArr.thankaArray[i][j].Id !== 0 && sectorsArr.thankaArray[i][j].Id !== -1) {
-                address = "/navigator/" + sectorsArr.thankaArray[i][j].URL;
+        // mousePosition может успеть сброситься на elem между mouseMove и onClick
+        // (тонкие сектора, курсор выскакивает за radius[c]). Поэтому
+        // используем selectedSector как fallback — он хранит последний
+        // сектор над которым был ховер.
+        // Ветка с ci/si работает только если клик *не* в центр и *не* по элементу.
+        // Иначе клик в центр перебивался веткой navigate("/create"):
+        // центр попадал в ci=0/si=0 (cell.Id=0) и вместо возврата к родителю
+        // открывался редактор создания тханки. Канон: центр — всегда возврат.
+        let ci = mousePosition.circle !== false ? mousePosition.circle : selectedSector.circle;
+        let si = mousePosition.sector !== false ? mousePosition.sector : selectedSector.sector;
+        if (!mousePosition.center
+            && mousePosition.elem === false
+            && ci !== false && si !== false
+            && sectorsArr.thankaArray[ci]
+            && sectorsArr.thankaArray[ci][si]) {
+            const cell = sectorsArr.thankaArray[ci][si];
+            if (cell.Id == 0 && access == true && !isLite) {
+                // SPA-навигация вместо window.location.assign:
+                // redux store с текущей data сохраняется, EditorComponent берёт
+                // ParentId = data.Id (текущая тханка). Это канонический способ
+                // создать дочь текущей тханки из пустого сектора.
+                navigate("/create", { state: { data } });
+                return;
+            }
+            else if (cell.Id !== 0 && cell.Id !== -1) {
+                address = "/navigator/" + cell.URL;
             }
         }
         if (address != "") {
@@ -886,6 +948,7 @@ function Canvas(props) {
         ctx.clearRect(0, 0, size.w, size.h)
         ctxT.clearRect(0, 0, size.w + 10, size.h)
         setMouse({ circle: false, sector: false, center: false, elem: false })
+        setSector({ circle: false, sector: false })
     }
 
     return (

@@ -75,14 +75,17 @@ def get_comments(adapter, data):
 
     res = adapter.execute("GetComments", data)
     result = res.Result
-    result["CommentList"] = registered(result.get("CommentList"))
-
-    for item in result["CommentList"]:
-        item["Image"] = image_flag(item.get("Author"))
-        item["Children"] = registered(item.get("Children"))
-
-        for child in item["Children"]:
-            child["Image"] = image_flag(child.get("Author"))
+    raw = result.get("CommentList")
+    if raw is None:
+        result["CommentList"] = None
+    else:
+        items = registered(raw)
+        for item in items:
+            item["Image"] = image_flag(item.get("Author"))
+            item["Children"] = registered(item.get("Children"))
+            for child in item["Children"]:
+                child["Image"] = image_flag(child.get("Author"))
+        result["CommentList"] = items if items else None
 
     cache.set(key, result)
     res.Result = result
@@ -91,7 +94,14 @@ def get_comments(adapter, data):
 
 def get_themes(adapter, data):
     res = adapter.execute("GetThemes", data)
-    res.Result["ThemeList"] = registered(res.Result.get("ThemeList"))
+    raw = res.Result.get("ThemeList")
+    # фронт ожидает ThemeList=null при отсутствии тем (см. Comment.jsx),
+    # иначе пытается взять ThemeList[0].ID и падает в catch с "Произошла ошибка"
+    if raw is None:
+        res.Result["ThemeList"] = None
+    else:
+        items = registered(raw)
+        res.Result["ThemeList"] = items if items else None
     return res
 
 

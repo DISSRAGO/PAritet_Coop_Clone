@@ -28,6 +28,21 @@ async def read_request_data(request: Request) -> tuple[dict[str, Any], dict[str,
     for key, value in form.multi_items():
         if isinstance(value, UploadFile):
             files[key] = value
+            continue
+
+        # axios 0.27 в multipart/form-data сериализует вложенные объекты
+        # либо как Thanka[Name] (bracket-notation), либо как Thanka.Name
+        # (dot-notation, фактически используется именно она — см. payload
+        # с фронта). Поддерживаем оба варианта и плюс одноуровневый
+        # синоним Thanka_Name для обратной совместимости с
+        # build_nested_thanka_form / устаревшими PHP-роутами.
+        m = re.match(r"^([A-Za-z_]\w*)[\.\[]([^\]\.]+)\]?$", key)
+        if m:
+            parent, child = m.group(1), m.group(2)
+            bucket = data.setdefault(parent, {})
+            if isinstance(bucket, dict):
+                bucket[child] = value
+            data.setdefault(f"{parent}_{child}", value)
         else:
             data[key] = value
 
@@ -153,7 +168,9 @@ def build_nested_thanka_form(data: dict[str, Any]) -> dict[str, Any]:
     Замена PHP-костыля в setThanka.php, где поля приходят как:
     Thanka_Annotation, Object_Name, Request_QueryName...
     """
-    if data.get("Thanka") or data.get("Object"):
+    # Если вложенные dict-ы уже собраны (JSON или multipart с bracket-notation) —
+    # ничего не делаем.
+    if isinstance(data.get("Thanka"), dict) or isinstance(data.get("Object"), dict):
         return data
 
     thanka_fields = [

@@ -115,6 +115,7 @@ export function ViewerLite(props) {
                         }
                         {settings.Interface == 'icon' &&
                             <Canvas
+                                key={data.Id}
                                 isBigScreen={false}
                                 isTinyScreen={false}
                                 data={data}

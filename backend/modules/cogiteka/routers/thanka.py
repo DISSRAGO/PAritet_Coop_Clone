@@ -5,6 +5,7 @@
 # cogiAPI/thanka/methods.php
 
 import re
+import uuid as _uuid
 from types import SimpleNamespace
 from typing import Any
 
@@ -234,18 +235,49 @@ def resolve_root_target_by_host(host: str) -> dict[str, str]:
 
     return host_map.get(host, {"Id": str(START_THANKA_ID), "SiteId": ""})
 
+def _resolve_user_cabinet(ad, user: dict) -> str:
+    """Возвращает thanka_id кабинета авторизованного пользователя (с кэшом)."""
+    login = user.get("login") or ""
+    if not login:
+        return ""
+    key = f"{login}_profile"
+    if cache.exists(key):
+        return cache.get(key) or ""
+    res = ad.execute(
+        "GetCabinetByUser",
+        {"UserId": user.get("id"), "Login": login},
+    )
+    if res.Error:
+        return ""
+    thanka_id = (res.Result or {}).get("Id") or ""
+    if thanka_id:
+        cache.set(key, thanka_id)
+    return thanka_id
+
+
+def _is_uuid(s: str) -> bool:
+    """Проверяет что строка — канонический UUID."""
+    try:
+        _uuid.UUID(str(s))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 def thanka_url_parser(url: str, user: dict, host: str = "") -> dict[str, str]:
     ad = cogi_adapter()
-    start = START_THANKA_ID
 
     thanka_id = ""
     site_id = ""
 
     if url in ("", "/"):
-        root_target = resolve_root_target_by_host(host)
-        thanka_id = str(root_target.get("Id", "")) if root_target.get("Id") else ""
-        site_id = str(root_target.get("SiteId", "")) if root_target.get("SiteId") else ""
-        print("URL_PARSER_ROOT", {"host": host, "Id": thanka_id, "SiteId": site_id})
+        # Для авторизованного юзера корень ведёт в его кабинет (это MVP V0.51,
+        # без публичной корневой тханки 18352). Для анонима — fallback на хост-мап.
+        thanka_id = _resolve_user_cabinet(ad, user)
+        if not thanka_id:
+            root_target = resolve_root_target_by_host(host)
+            thanka_id = str(root_target.get("Id", "")) if root_target.get("Id") else ""
+            site_id = str(root_target.get("SiteId", "")) if root_target.get("SiteId") else ""
     else:
         address = url.split("/")
         if address and address[0] == "":
@@ -256,35 +288,31 @@ def thanka_url_parser(url: str, user: dict, host: str = "") -> dict[str, str]:
 
         if first in ("navigator", "lite"):
             if second == "":
-                thanka_id = start
-            elif re.search(r"\d+", second):
-                thanka_id = address[-1]
-
-            key = f"{thanka_id}_isDocPart"
-            if not cache.exists(key):
-                res = ad.execute("IsDocumentPart", {"Id": thanka_id})
-                cache.set(key, res.Result)
+                # /navigator/ без суффикса → кабинет пользователя
+                thanka_id = _resolve_user_cabinet(ad, user)
             else:
-                thanka_id = start
+                # last_seg может быть UUID, числом или CustomURL (DocumentPath).
+                # Если не UUID и не число — резолвим через GetIdByCustomURL,
+                # иначе бэк будет искать тханку по строковому ID и отдавать
+                # «статью» без Children.
+                last_seg = address[-1]
+                if _is_uuid(last_seg) or is_digit(last_seg):
+                    thanka_id = last_seg
+                else:
+                    res = ad.execute("GetIdByCustomURL", {"url": last_seg})
+                    rtype = (res.Result or {}).get("Type")
+                    if rtype == "navigator":
+                        thanka_id = (res.Result or {}).get("Id") or ""
+                    elif rtype == "sitepage":
+                        site_id = (res.Result or {}).get("Id") or ""
+                    else:
+                        # Не разобрали — оставляем как есть, бэк вернёт ошибку/пустоту
+                        thanka_id = last_seg
 
         elif first == "profile":
-            key = f"{user.get('login')}_profile"
-
-            if cache.exists(key):
-                thanka_id = cache.get(key)
-            else:
-                params = {
-                    "UserId": user.get("id"),
-                    "Login": user.get("login"),
-                }
-
-                res = ad.execute("GetCabinetByUser", params)
-
-                if res.Error:
-                    return {"Id": "", "SiteId": ""}
-
-                thanka_id = res.Result.get("Id")
-                cache.set(key, thanka_id)
+            thanka_id = _resolve_user_cabinet(ad, user)
+            if not thanka_id:
+                return {"Id": "", "SiteId": ""}
 
         elif first == "sitepage":
             site_id = second
@@ -581,7 +609,8 @@ def build_thanka_stub(
 
     return result
 
-@router.post("/thanka/getThanka.php")
+@router.post("/thanka/getThanka")
+@router.post("/thanka/getThanka.php")  # legacy alias
 async def get_thanka_endpoint(request: Request):
     user, _ = await read_request_data(request)
 
@@ -592,13 +621,7 @@ async def get_thanka_endpoint(request: Request):
     thanka_id = parsed_address.get("Id", "")
     site_id = parsed_address.get("SiteId", "")
 
-    print("GET_THANKA_DEBUG user=", user)
-    print("GET_THANKA_DEBUG host=", request_host)
-    print("GET_THANKA_DEBUG raw_address=", raw_address)
-    print("GET_THANKA_DEBUG parsed_address=", parsed_address)
-    
     if not thanka_id and not site_id:
-        print("GET_THANKA_DEBUG no thanka_id and no site_id")
         return json_response(
             build_thanka_stub(
                 thanka_id=thanka_id,
@@ -624,11 +647,7 @@ async def get_thanka_endpoint(request: Request):
         "SiteId": site_id,
     }
 
-    print("GET_THANKA_DEBUG method=", method)
-    print("GET_THANKA_DEBUG params=", params)
-
     ad = cogi_adapter()
-    ad.debug = True
     res = ad.execute(method, params)
 
     error = getattr(res, "Error", None)
@@ -638,14 +657,6 @@ async def get_thanka_endpoint(request: Request):
     status = getattr(res, "Status", None)
     soap_xml = getattr(res, "SoapXML", None)
     soap_fault = getattr(res, "SoapFault", None)
-
-    print("GET_THANKA_DEBUG adapter_error=", error)
-    print("GET_THANKA_DEBUG adapter_result=", result)
-    print("GET_THANKA_DEBUG removed=", removed)
-    print("GET_THANKA_DEBUG status=", status)
-    print("GET_THANKA_DEBUG fault=", soap_fault)
-    print("GET_THANKA_DEBUG soap_request=", getattr(soap_xml, "Request", None))
-    print("GET_THANKA_DEBUG soap_response=", getattr(soap_xml, "Response", None))
 
     if error or removed is True or result_dict == {}:
         return json_response(
@@ -674,7 +685,8 @@ async def get_thanka_endpoint(request: Request):
 
     return json_response(normalized)
 
-@router.post("/thanka/setThanka.php")
+@router.post("/thanka/setThanka")
+@router.post("/thanka/setThanka.php")  # legacy alias
 async def set_thanka_endpoint(request: Request):
     data, files = await read_request_data(request)
     data = build_nested_thanka_form(data)
@@ -721,6 +733,15 @@ async def set_thanka_endpoint(request: Request):
 
     elif editor_type in ("createsite", "create", "add"):
         res = ad.execute("CreateThanka", data)
+        # Если адаптер вернул Error=True (напр. ValueError: Thanka.Name is required),
+        # не продолжаем и не навигируем никуда — отдаём 400 с понятным текстом,
+        # чтобы фронт вывел «Произошла ошибка» из catch вместо навигации на /navigator/undefined.
+        if getattr(res, "Error", False):
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail=(getattr(res, "Status", None) and res.Status.Text) or "create_thanka_failed",
+            )
         result = res.Result
         result_id = result.get("Id")
 
@@ -749,12 +770,28 @@ async def set_thanka_endpoint(request: Request):
         return json_response({"Error": "unknown EditorType"}, status_code=400)
 
     if "Picture" in files and result_id:
-        coords = {
-            "top": data.get("PictureCoords_top", 0),
-            "left": data.get("PictureCoords_left", 0),
-            "height": data.get("PictureCoords_height", 0),
-            "width": data.get("PictureCoords_width", 0),
-        }
+        pc = data.get("PictureCoords")
+        if isinstance(pc, dict):
+            coords = {
+                "top": pc.get("top", 0),
+                "left": pc.get("left", 0),
+                "height": pc.get("height", 0),
+                "width": pc.get("width", 0),
+            }
+        else:
+            coords = {
+                "top": data.get("PictureCoords_top", 0),
+                "left": data.get("PictureCoords_left", 0),
+                "height": data.get("PictureCoords_height", 0),
+                "width": data.get("PictureCoords_width", 0),
+            }
+        # защита от нулевого crop: если width/height пустые или 0 — сбрасываем
+        # в None, и save_thanka_picture возьмёт полный размер исходника.
+        try:
+            if float(coords.get("width") or 0) <= 0 or float(coords.get("height") or 0) <= 0:
+                coords = {"top": 0, "left": 0, "width": 0, "height": 0}
+        except (TypeError, ValueError):
+            coords = {"top": 0, "left": 0, "width": 0, "height": 0}
         await save_thanka_picture(result_id, files["Picture"], DATA_DIR, coords)
 
     if res.Error:
@@ -820,8 +857,8 @@ def remove_thanka(ad, data):
     return res
 
 
-@router.post("/thanka/thanka.php")
 @router.post("/thanka")
+@router.post("/thanka/thanka.php")  # legacy alias
 async def thanka_methods_endpoint(request: Request):
     data, _ = await read_request_data(request)
 

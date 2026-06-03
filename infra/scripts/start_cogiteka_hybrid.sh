@@ -68,6 +68,20 @@ else
   echo "Python dependencies are up to date."
 fi
 
+echo "[2.5/6] Preparing data directory and default images ..."
+mkdir -p "$COGI_DATA_DIR"
+STATIC_DATA_DIR="$ROOT/infra/static-data"
+if [ -d "$STATIC_DATA_DIR" ]; then
+  for f in unfound.jpg empty.jpg; do
+    src="$STATIC_DATA_DIR/$f"
+    dst="$COGI_DATA_DIR/$f"
+    if [ -f "$src" ] && [ ! -f "$dst" ]; then
+      cp "$src" "$dst"
+      echo "  copied $f -> $dst"
+    fi
+  done
+fi
+
 echo "[3/6] Starting backend on :$API_PORT ..."
 if [ -f "$API_DIR/.uvicorn.pid" ]; then
   kill "$(cat "$API_DIR/.uvicorn.pid")" 2>/dev/null || true

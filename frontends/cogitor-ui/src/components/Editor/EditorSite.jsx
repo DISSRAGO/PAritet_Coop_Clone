@@ -233,16 +233,61 @@ function EditorSite(props) {
         dataToEditor.Object.Type = 'site';
 
         if (dataToEditor.Thanka.Name != "" && checkedURL) {
-            axios({
-                method: "post",
-                url: PATH + "thanka/setThanka.php",
-                //данные отправятся в $_POST и $_FILES, а то мы не вытащим оттуда картинку
-                headers: { "content-type": "multipart/form-data" },
-                data: dataToEditor,
-            }).then((result) => {
+            // axios 0.27 не умеет сериализовать вложенные объекты в multipart —
+            // собираем FormData вручную по схеме легаси-PHP (плоские ключи).
+            const hasFile = (
+                selectedPictureSend && typeof selectedPictureSend !== "string"
+            )
+            let axiosCfg
+            if (hasFile) {
+                const fd = new FormData()
+                const appendFlat = (prefix, obj) => {
+                    if (!obj || typeof obj !== "object") return
+                    for (const k of Object.keys(obj)) {
+                        const v = obj[k]
+                        if (v === undefined || v === null) continue
+                        if (typeof v === "object" && !(v instanceof File) && !(v instanceof Blob)) continue
+                        fd.append(`${prefix}_${k}`, v)
+                    }
+                }
+                appendFlat("Thanka", dataToEditor.Thanka)
+                appendFlat("Object", dataToEditor.Object)
+                appendFlat("Request", dataToEditor.Request)
+                for (const k of Object.keys(dataToEditor)) {
+                    if (k === "Thanka" || k === "Object" || k === "Request") continue
+                    if (k === "Picture" || k === "PictureCoords") continue
+                    const v = dataToEditor[k]
+                    if (v === undefined || v === null) continue
+                    if (typeof v === "object") continue
+                    fd.append(k, v)
+                }
+                if (selectedPicCoord && typeof selectedPicCoord === "object") {
+                    for (const k of ["top", "left", "width", "height"]) {
+                        if (selectedPicCoord[k] !== undefined && selectedPicCoord[k] !== null) {
+                            fd.append(`PictureCoords_${k}`, selectedPicCoord[k])
+                        }
+                    }
+                }
+                fd.append("Picture", selectedPictureSend)
+                axiosCfg = {
+                    method: "post",
+                    url: PATH + "thanka/setThanka.php",
+                    data: fd,
+                }
+            } else {
+                axiosCfg = {
+                    method: "post",
+                    url: PATH + "thanka/setThanka.php",
+                    headers: { "content-type": "application/json" },
+                    data: dataToEditor,
+                }
+            }
+            axios(axiosCfg).then((result) => {
                 if (result.data != null) {
                     let standartURL = type == 'createsite' ? "/sitepage/" + result.data.SitePageId : "/sitepage/" + data.Id
-                    window.location.assign(customURL != "" ? '/' + customURL : standartURL);
+                    // replace, а не assign — иначе Back вернёт на /createsite и
+                    // восстановит редактор из sessionStorage["address"].
+                    window.location.replace(customURL != "" ? '/' + customURL : standartURL);
                 }
             }).catch((error) => {
                 setSystemMessageText("Произошла ошибка");

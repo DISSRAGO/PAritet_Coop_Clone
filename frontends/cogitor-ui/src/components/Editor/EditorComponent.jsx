@@ -550,7 +550,17 @@ function EditorInner(props) {
             let axiosCfg
             // DEBUG: убрать после фикса картинок
             // eslint-disable-next-line no-console
-            console.log("[setThanka DEBUG] hasFile=", hasFile, "selectedPictureSend=", selectedPictureSend, "selectedPictureSend type=", typeof selectedPictureSend, "isFile=", selectedPictureSend instanceof File)
+            console.log(
+                "[setThanka DEBUG] hasFile=", hasFile,
+                "selectedPictureSend=", selectedPictureSend,
+                "typeof=", typeof selectedPictureSend,
+                "isFile=", selectedPictureSend instanceof File,
+                "isBlob=", selectedPictureSend instanceof Blob,
+                "ctor=", selectedPictureSend && selectedPictureSend.constructor && selectedPictureSend.constructor.name,
+                "name=", selectedPictureSend && selectedPictureSend.name,
+                "size=", selectedPictureSend && selectedPictureSend.size,
+                "keys=", selectedPictureSend && typeof selectedPictureSend === 'object' ? Object.keys(selectedPictureSend) : null
+            )
             if (hasFile) {
                 const fd = new FormData()
                 const appendFlat = (prefix, obj) => {
@@ -597,7 +607,15 @@ function EditorInner(props) {
                 }
                 // DEBUG: убрать после фикса картинок
                 // eslint-disable-next-line no-console
-                console.log("[setThanka DEBUG] FormData keys:", Array.from(fd.keys()), "hasPicture=", fd.has("Picture"), "pictureEntry=", fd.get("Picture"))
+                const _pe = fd.get("Picture")
+                console.log(
+                    "[setThanka DEBUG] FormData keys:", Array.from(fd.keys()),
+                    "hasPicture=", fd.has("Picture"),
+                    "pictureEntry=", _pe,
+                    "pictureEntry isFile=", _pe instanceof File,
+                    "pictureEntry isBlob=", _pe instanceof Blob,
+                    "pictureEntry typeof=", typeof _pe
+                )
                 axiosCfg = {
                     method: "post",
                     url: PATH + "thanka/setThanka.php",

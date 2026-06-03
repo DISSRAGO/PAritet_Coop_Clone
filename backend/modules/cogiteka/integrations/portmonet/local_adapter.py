@@ -148,24 +148,52 @@ class LocalCogiAdapter:
         avatar_list = self._avatar_list_for(login=login)
         author_id = avatar_list[0]["ID"] if avatar_list else ""
 
+        # thanka_id может приходить как UUID, так и custom_url (напр. WarhammerTheOldWorld).
+        # Канон PHP: ?StartThanka=WarhammerTheOldWorld — это читаемый URL.
+        # Сначала пробуем как UUID, потом ищем по cogobject.current_content->>'custom_url'.
         row = None
         if thanka_id:
-            rows = _q(
-                """
-                SELECT t.thanka_id::text AS id,
-                       t.title           AS name,
-                       t.status          AS status,
-                       t.author_id::text AS author_id,
-                       COALESCE(co.current_content, '{}'::jsonb) AS content
-                FROM thanka t
-                LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
-                WHERE t.thanka_id::text = %s
-                LIMIT 1
-                """,
-                (thanka_id,),
-            )
-            if rows:
-                row = rows[0]
+            # Пробуем UUID-соответствие только если значение похоже на UUID,
+            # иначе cast сломается в PostgreSQL.
+            import re as _re
+            uuid_pattern = _re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+            if uuid_pattern.match(thanka_id):
+                rows = _q(
+                    """
+                    SELECT t.thanka_id::text AS id,
+                           t.title           AS name,
+                           t.status          AS status,
+                           t.author_id::text AS author_id,
+                           COALESCE(co.current_content, '{}'::jsonb) AS content
+                    FROM thanka t
+                    LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+                    WHERE t.thanka_id::text = %s
+                    LIMIT 1
+                    """,
+                    (thanka_id,),
+                )
+                if rows:
+                    row = rows[0]
+            # Fallback: ищем по custom_url.
+            if row is None:
+                rows = _q(
+                    """
+                    SELECT t.thanka_id::text AS id,
+                           t.title           AS name,
+                           t.status          AS status,
+                           t.author_id::text AS author_id,
+                           COALESCE(co.current_content, '{}'::jsonb) AS content
+                    FROM thanka t
+                    LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+                    WHERE co.current_content->>'custom_url' = %s
+                    LIMIT 1
+                    """,
+                    (thanka_id,),
+                )
+                if rows:
+                    row = rows[0]
+                    # Нормализуем thanka_id к UUID для дальнейшей логики ниже.
+                    thanka_id = row["id"]
 
         content = (row["content"] if row else {}) or {}
         if isinstance(content, str):
@@ -179,18 +207,29 @@ class LocalCogiAdapter:
         obj_type = content.get("type") or ("avatar" if is_cabinet else "article")
         custom_url = content.get("custom_url") or ""
 
-        # Резолвим parent_id в ParentId / ParentName — это источник правды
-        # для клика в центр (Canvas.jsx ведёт на /navigator/<ParentId>).
+        # Резолвим parent_id в ParentId / ParentName / ParentCustomUrl —
+        # это источник правды для клика в центр (Canvas.jsx ведёт на
+        # /navigator/<ParentCustomUrl> с fallback на <ParentId>).
         # Для кабинетных тханок parent_id пуст — это корень дерева.
         parent_id = "" if is_cabinet else str(content.get("parent_id") or "").strip()
         parent_name = ""
+        parent_custom_url = ""
         if parent_id:
+            # JOIN cogobject для custom_url родителя — он живёт в jsonb.
             prows = _q(
-                "SELECT title FROM thanka WHERE thanka_id::text = %s LIMIT 1",
+                """
+                SELECT t.title,
+                       COALESCE(c.current_content->>'custom_url', '') AS custom_url
+                FROM thanka t
+                LEFT JOIN cogobject c ON c.thanka_id = t.thanka_id
+                WHERE t.thanka_id::text = %s
+                LIMIT 1
+                """,
                 (parent_id,),
             )
             if prows:
                 parent_name = prows[0]["title"] or ""
+                parent_custom_url = prows[0]["custom_url"] or ""
             else:
                 # родитель исчез (удалён) — обнуляем, чтобы не вести на битую ссылку
                 parent_id = ""
@@ -204,6 +243,7 @@ class LocalCogiAdapter:
             "MainPage": False,
             "ParentId": parent_id,
             "ParentName": parent_name,
+            "ParentCustomUrl": parent_custom_url,
             "Author": (row["author_id"] if row else author_id) or author_id,
             "AuthorName": login,
             "CustomURL": custom_url,
@@ -329,6 +369,7 @@ class LocalCogiAdapter:
                 "MainPage": True,
                 "ParentId": "",
                 "ParentName": "",
+                "ParentCustomUrl": "",
                 "Author": author_id,
                 "AuthorName": login,
             },

@@ -542,19 +542,71 @@ function EditorInner(props) {
                 || (typeof selectedPDF === "object" && selectedPDF !== null)
             )
 
-            const axiosCfg = hasFile
-                ? {
+            // axios 0.27 не умеет сериализовывать вложенные объекты в
+            // multipart, поэтому при наличии File собираем FormData вручную
+            // по схеме легаси-PHP: плоские ключи Thanka_Name, Object_Type,
+            // Request_Fields, файл — отдельным полем Picture. Бэк через
+            // build_nested_thanka_form собирает вложенные dict-ы обратно.
+            let axiosCfg
+            if (hasFile) {
+                const fd = new FormData()
+                const appendFlat = (prefix, obj) => {
+                    if (!obj || typeof obj !== "object") return
+                    for (const k of Object.keys(obj)) {
+                        const v = obj[k]
+                        if (v === undefined || v === null) continue
+                        // вложенные объекты не ожидаются здесь, но защита
+                        if (typeof v === "object" && !(v instanceof File) && !(v instanceof Blob)) {
+                            // PictureCoords — единственный вложенный dict,
+                            // его развернём через PictureCoords_top/.. ниже
+                            continue
+                        }
+                        fd.append(`${prefix}_${k}`, v)
+                    }
+                }
+                // плоские ключи Thanka/Object/Request
+                appendFlat("Thanka", dataToEditor.Thanka)
+                appendFlat("Object", dataToEditor.Object)
+                appendFlat("Request", dataToEditor.Request)
+                // верхнеуровневые скаляры
+                for (const k of Object.keys(dataToEditor)) {
+                    if (k === "Thanka" || k === "Object" || k === "Request") continue
+                    if (k === "Picture" || k === "PictureCoords") continue
+                    const v = dataToEditor[k]
+                    if (v === undefined || v === null) continue
+                    if (typeof v === "object") continue
+                    fd.append(k, v)
+                }
+                // PictureCoords развернём в PictureCoords_top/left/width/height
+                if (selectedPicCoord && typeof selectedPicCoord === "object") {
+                    for (const k of ["top", "left", "width", "height"]) {
+                        if (selectedPicCoord[k] !== undefined && selectedPicCoord[k] !== null) {
+                            fd.append(`PictureCoords_${k}`, selectedPicCoord[k])
+                        }
+                    }
+                }
+                // сам файл
+                if (selectedPictureSend && typeof selectedPictureSend !== "string") {
+                    fd.append("Picture", selectedPictureSend)
+                }
+                if (typeof selectedPDF === "object" && selectedPDF !== null) {
+                    fd.append("PDF", selectedPDF)
+                }
+                axiosCfg = {
                     method: "post",
                     url: PATH + "thanka/setThanka.php",
-                    headers: { "content-type": "multipart/form-data" },
-                    data: dataToEditor,
-                  }
-                : {
+                    // не задаём content-type вручную: axios+браузер выставят
+                    // multipart/form-data с правильным boundary автоматически
+                    data: fd,
+                }
+            } else {
+                axiosCfg = {
                     method: "post",
                     url: PATH + "thanka/setThanka.php",
                     headers: { "content-type": "application/json" },
                     data: dataToEditor,
-                  }
+                }
+            }
 
             axios(axiosCfg).then((result) => {
                 if (result.data != null) {
@@ -563,8 +615,13 @@ function EditorInner(props) {
                     //   всё остальное ↑ если есть CustomURL — /CustomURL
                     //                 иначе fallback /navigator/<UUID> (бэк-резолвер
                     //                 всё равно найдёт тханку по UUID).
+                    // После успеха используем replace, а не assign: иначе нажатие
+                    // "Назад" в браузере вернёт на /create, который восстановится из
+                    // sessionStorage["address"] и покажет редактор только что
+                    // созданной тханки — выглядит как "выкинуло в создание тханки".
+                    // replace убирает /create из истории, и Back ведёт на родителя.
                     if (selectedType == 'avatar' && customURL != "") {
-                        window.location.assign("/@" + customURL);
+                        window.location.replace("/@" + customURL);
                     }
                     else if (result.data.DocPath == "" || result.data.DocPath == undefined) {
                         // CustomURL из ответа бэка (источник правды) — важно:
@@ -582,20 +639,20 @@ function EditorInner(props) {
                                 addLink(result.data.Id, data.Id)
                             }
                             if (savedCustomURL) {
-                                window.location.assign("/" + savedCustomURL);
+                                window.location.replace("/" + savedCustomURL);
                             } else {
-                                window.location.assign("/navigator/" + result.data.Id);
+                                window.location.replace("/navigator/" + result.data.Id);
                             }
                         } else {
                             // edit — есть Id редактируемой тханки
                             if (savedCustomURL) {
-                                window.location.assign("/" + savedCustomURL);
+                                window.location.replace("/" + savedCustomURL);
                             } else {
-                                window.location.assign("/navigator/" + dataToEditor.Id);
+                                window.location.replace("/navigator/" + dataToEditor.Id);
                             }
                         }
                     } else {
-                        window.location.assign("/navigator/" + result.data.DocPath);
+                        window.location.replace("/navigator/" + result.data.DocPath);
                     }
                 }
             }).catch((error) => {

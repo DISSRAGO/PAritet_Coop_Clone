@@ -1,10 +1,6 @@
 from fastapi import APIRouter
 
 from backend.modules.cogiteka.routers.auth import router as auth_router
-from backend.modules.cogiteka.routers.subject import (
-    router as subject_router,
-    subject_app_router,
-)
 from backend.modules.cogiteka.routers import (
     community,
     files,
@@ -17,11 +13,12 @@ from backend.modules.cogiteka.routers import (
     users,
 )
 
+# Subject (low-level /api/subject + facade /api/app/subjects) переехал в
+# HomoNet и подключается через homonet_router в backend/main.py.
+
 cogi_router = APIRouter(prefix="/api", tags=["cogi"])
 
 cogi_router.include_router(auth_router)
-cogi_router.include_router(subject_router)
-cogi_router.include_router(subject_app_router)
 cogi_router.include_router(users.router)
 cogi_router.include_router(community.router)
 cogi_router.include_router(location.router)

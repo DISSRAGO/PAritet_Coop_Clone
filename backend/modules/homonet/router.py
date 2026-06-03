@@ -3,8 +3,9 @@
 Собирает low-level domain-роутеры (/subjects, /communities, /memberships,
 /roles, /representations) и facade-роутер (/app/*).
 
-В этом скелетном PR роутер пустой — наполнение идёт следующими PR-ами:
-- PR B: перенос /api/subject и /api/app/subjects из cogiteka
+Наполнение по этапам:
+- PR A: скелет
+- PR B (текущий): subject (legacy /api/subject/* + facade /api/app/subjects/*)
 - PR C: миграция auth_user → person + personal subject
 - PR D: Thanka.author_subject_id
 
@@ -13,7 +14,15 @@
 
 from fastapi import APIRouter
 
+from backend.modules.homonet.domains.subject.router import (
+    router as subject_router,
+    subject_app_router,
+)
+
 homonet_router = APIRouter(prefix="/api", tags=["homonet"])
+
+homonet_router.include_router(subject_router)
+homonet_router.include_router(subject_app_router)
 
 
 @homonet_router.get("/homonet/health", tags=["health"])

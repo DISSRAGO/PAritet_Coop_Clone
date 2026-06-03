@@ -894,11 +894,20 @@ class LocalCogiAdapter:
         """
         Гарантирует наличие subject/author/avatar для логина из auth_user.
         Возвращает author_id (uuid::text) либо пустую строку.
+
+        Канон V0.51: person → subject(kind='personal', person_id) →
+        author(subject_id) → avatar(author_id, login).
+
+        Идемпотентен по всей цепочке: переиспользует уже существующие
+        звенья и создаёт лишь недостающие. Это важно потому что
+        homonet.subject имеет UNIQUE на person_id, и повторный INSERT
+        для пользователя, у которого уже есть personal subject
+        (напр. после backfill_personal_subjects), упал бы на 23505.
         """
         if not login:
             return ""
 
-        # уже есть?
+        # 1. Самый быстрый путь: avatar+author уже есть для этого логина
         rows = _q(
             """
             SELECT a.author_id::text AS author_id
@@ -912,45 +921,95 @@ class LocalCogiAdapter:
         if rows:
             return rows[0]["author_id"]
 
-        # ищем auth_user
+        # 2. Ищем auth_user — уже со связями person_id / subject_id
         au = _q(
-            "SELECT user_id::text AS uid FROM auth_user WHERE login = %s",
+            """
+            SELECT
+                user_id::text   AS uid,
+                person_id::text  AS person_id,
+                subject_id::text AS subject_id
+            FROM auth_user
+            WHERE login = %s
+            """,
             (login,),
         )
         if not au:
             return ""
+        person_id = au[0]["person_id"]
+        subject_id = au[0]["subject_id"]
+        user_id = au[0]["uid"]
 
-        # Каноническая схема V0.51: person -> subject(kind='personal', person_id) -> author -> avatar
-        person = _q(
-            """
-            INSERT INTO person (display_name, status)
-            VALUES (%s, 'active')
-            RETURNING person_id::text AS pid
-            """,
-            (login,),
+        # 3. Переиспользуем существующий personal subject для person,
+        #    если auth_user.subject_id оказался пустым, но subject уже был создан
+        #    (рассинхрон после ранних миграций).
+        if subject_id is None and person_id is not None:
+            existing_subj = _q(
+                """
+                SELECT subject_id::text AS sid
+                FROM subject
+                WHERE person_id = %s AND subject_kind = 'personal'
+                """,
+                (person_id,),
+            )
+            if existing_subj:
+                subject_id = existing_subj[0]["sid"]
+                _q(
+                    "UPDATE auth_user SET subject_id = %s, updated_at = now() WHERE user_id = %s",
+                    (subject_id, user_id),
+                )
+
+        # 4. Создаём недостающие person и/или subject
+        if person_id is None:
+            person = _q(
+                """
+                INSERT INTO person (display_name, status)
+                VALUES (%s, 'active')
+                RETURNING person_id::text AS pid
+                """,
+                (login,),
+            )
+            person_id = person[0]["pid"] if person else None
+            if person_id is not None:
+                _q(
+                    "UPDATE auth_user SET person_id = %s, updated_at = now() WHERE user_id = %s",
+                    (person_id, user_id),
+                )
+
+        if subject_id is None:
+            subj = _q(
+                """
+                INSERT INTO subject (subject_kind, person_id, display_name)
+                VALUES ('personal', %s, %s)
+                RETURNING subject_id::text AS sid
+                """,
+                (person_id, login),
+            )
+            subject_id = subj[0]["sid"] if subj else None
+            if subject_id is not None:
+                _q(
+                    "UPDATE auth_user SET subject_id = %s, updated_at = now() WHERE user_id = %s",
+                    (subject_id, user_id),
+                )
+
+        # 5. Переиспользуем или создаём author для этого subject
+        author_rows = _q(
+            "SELECT author_id::text AS aid FROM author WHERE subject_id = %s LIMIT 1",
+            (subject_id,),
         )
-        person_id = person[0]["pid"] if person else None
+        if author_rows:
+            author_id = author_rows[0]["aid"]
+        else:
+            new_author = _q(
+                """
+                INSERT INTO author (subject_id, display_name)
+                VALUES (%s, %s)
+                RETURNING author_id::text AS aid
+                """,
+                (subject_id, login),
+            )
+            author_id = new_author[0]["aid"]
 
-        subj = _q(
-            """
-            INSERT INTO subject (subject_kind, person_id, display_name)
-            VALUES ('personal', %s, %s)
-            RETURNING subject_id::text AS sid
-            """,
-            (person_id, login),
-        )
-        subject_id = subj[0]["sid"] if subj else None
-
-        auth_rows = _q(
-            """
-            INSERT INTO author (subject_id, display_name)
-            VALUES (%s, %s)
-            RETURNING author_id::text AS aid
-            """,
-            (subject_id, login),
-        )
-        author_id = auth_rows[0]["aid"]
-
+        # 6. avatar — на login UNIQUE, ON CONFLICT DO NOTHING
         _q(
             """
             INSERT INTO avatar (author_id, login, status)

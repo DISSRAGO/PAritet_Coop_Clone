@@ -6,9 +6,21 @@ from pathlib import Path
 from typing import Any
 
 from bs4 import BeautifulSoup
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request
+from fastapi import UploadFile as FastAPIUploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from starlette.datastructures import UploadFile as StarletteUploadFile
+
+# request.form() из Starlette создаёт starlette.datastructures.UploadFile,
+# а в FastAPI отдельный fastapi.datastructures.UploadFile, который НЕ
+# является наследником starlette-овского. Из-за этого `isinstance(v, UploadFile)`
+# с импортом только из fastapi отсекал реальные загруженные файлы — они
+# уходили в data как объекты, и save_thanka_picture никогда не вызывался.
+# Проверяем оба класса (кортеж в isinstance).
+_UPLOAD_FILE_TYPES = (FastAPIUploadFile, StarletteUploadFile)
+# Внешний синоним для аннотаций возвращаемого типа.
+UploadFile = StarletteUploadFile
 
 from backend.modules.cogiteka.core.config import DATA_DIR
 
@@ -26,7 +38,7 @@ async def read_request_data(request: Request) -> tuple[dict[str, Any], dict[str,
     data: dict[str, Any] = {}
 
     for key, value in form.multi_items():
-        if isinstance(value, UploadFile):
+        if isinstance(value, _UPLOAD_FILE_TYPES):
             files[key] = value
             continue
 

@@ -115,9 +115,9 @@ function LocationAttrs(props) {
             <p>Место события:</p>
             <div className="locationPart">
             <label>{"Страна: "}</label>
-            <select name="Country" onChange={countryOnChange} defaultValue = {selectedCountry}>
+            <select name="Country" onChange={countryOnChange} value={selectedCountry}>
                 {countries.map((country) => (
-                    <option value={country.Id} selected={country.Id == selectedCountry ? "selected" : ""}>
+                    <option key={country.Id} value={country.Id}>
                         {country.Name}
                     </option>
                 ))}
@@ -125,9 +125,9 @@ function LocationAttrs(props) {
         </div>
         <div className="locationPart">
             <label>{"Регион: "}</label>
-            <select name="Region" onChange={regionOnChange} defaultValue={selectedRegion}>
+            <select name="Region" onChange={regionOnChange} value={selectedRegion}>
                 {regions.map((region) => (
-                    <option value={region.Id} selected={region.Id == selectedRegion ? "selected" : ""}>
+                    <option key={region.Id} value={region.Id}>
                         {region.Name}
                     </option>
                 ))}
@@ -135,9 +135,9 @@ function LocationAttrs(props) {
         </div>
         <div className="locationPart">
             <label>{"Город: "}</label>
-            <select name="City" onChange={props.onChange}>
+            <select name="City" onChange={(e) => { setSelectedCity(e.target.value); if (props.onChange) props.onChange(e); }} value={selectedCity}>
                 {cities.map((city) => (
-                    <option value={city.Id} selected={city.Id == selectedCity ? "selected" : ""}>
+                    <option key={city.Id} value={city.Id}>
                         {city.Name}
                     </option>
                 ))}

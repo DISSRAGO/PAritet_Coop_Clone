@@ -63,6 +63,7 @@ function Left(props) {
             <>{ interfaceType == 'iconostas' &&
                 <div id='graphicInterface'> 
                         <Canvas 
+                            key={data.Id}
                             isBigScreen = {isBigScreen}
                             isTinyScreen = {isTinyScreen}
                             data={data} 

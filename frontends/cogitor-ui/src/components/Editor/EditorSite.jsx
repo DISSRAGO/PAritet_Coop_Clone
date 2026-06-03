@@ -165,14 +165,14 @@ function EditorSite(props) {
 
     useEffect(() => {
 
-        if (type != 'editsite' && data.AvatarList !== null) {
+        if (type != 'editsite' && data.AvatarList !== null && data.AvatarList !== undefined) {
             if (data.PrivacyLevel == 6) {
-                if (data.Object.Type == 'avatar') {
+                if (data.Object && data.Object.Type == 'avatar') {
                     setSelectedAuthor(data.Id);
-                } else {
+                } else if (data.Thanka) {
                     setSelectedAuthor(data.Thanka.Author)
                 }
-            } else {
+            } else if (Array.isArray(data.AvatarList) && data.AvatarList.length > 0) {
                 setSelectedAuthor(data.AvatarList[0].ID);
             }
         }

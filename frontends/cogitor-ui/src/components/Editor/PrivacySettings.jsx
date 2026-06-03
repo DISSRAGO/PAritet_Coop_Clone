@@ -15,16 +15,17 @@ function Elements(props) {
 
     const { data, elemArr, setElements } = props;
 
+    //таблица-подсказка для стихий
+    const [isTableVision, setTableVision] = useState(false);
+
+    const [selectedElements, setSelectedElements] = useState(elemArr);
+
     useEffect(() => {
         if (data.Elements != null && selectedElements.length == 0) {
             setSelectedElements(elemArr);
         }
     }, [elemArr]);
 
-    //таблица-подсказка для стихий
-    const [isTableVision, setTableVision] = useState(false);
-
-    const [selectedElements, setSelectedElements] = useState(elemArr);
     const onChangeElements = (e) => {
         let elements = selectedElements.slice(0);
         let i = e.target.name;
@@ -32,7 +33,11 @@ function Elements(props) {
         setSelectedElements(elements);
     };
 
-    setElements(selectedElements);
+    // раньше setElements(...) вызывался прямо в render — это вызывало React-предупреждение
+    // «Cannot update a component while rendering a different component». Переносим в effect.
+    useEffect(() => {
+        setElements(selectedElements);
+    }, [selectedElements]);
 
     const [list, setList] = useState(data.Elements)
 
@@ -160,15 +165,20 @@ export function ThankaPic(props) {
                 sizeW = selectedPicCoord.width * coeff;
                 sizeH = selectedPicCoord.height * coeff;
 
-                if (sizeW != sizeH) {
+                if (sizeW != sizeH && selectedPicCoord.height) {
                     setPrevSize({x: selectedPicCoord.width * 150 / selectedPicCoord.height, y: 150})
                 }
-                
-                Promise.all([
-                    createImageBitmap(image, left, top, sizeW, sizeH).then(imageBitmap => {
-                        ctx.drawImage(imageBitmap, 0, 0, sizeW, sizeH, 0, 0, prevSize.x, prevSize.y)
-                    })
-                ])
+
+                // Guard: createImageBitmap падает с RangeError, если ширина или
+                // высота кропа = 0 (это бывает, пока пользователь ещё не выбрал
+                // область кропа после загрузки картинки).
+                if (sizeW > 0 && sizeH > 0) {
+                    Promise.all([
+                        createImageBitmap(image, left, top, sizeW, sizeH).then(imageBitmap => {
+                            ctx.drawImage(imageBitmap, 0, 0, sizeW, sizeH, 0, 0, prevSize.x, prevSize.y)
+                        })
+                    ]).catch(() => { /* картинка ещё не готова — пропускаем */ })
+                }
             }
             if (selectedPicture != null && !isPic) {
                 ctx.drawImage(img, 0, 0, 350, 350, 0, 0, prevSize.x, prevSize.y)

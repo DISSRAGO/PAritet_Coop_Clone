@@ -822,7 +822,7 @@ function MainContent(props) {
 
     return (
         <>
-            {data.PrivacyLevel == 6 && (data.Id == data.MainPage.ID) &&
+            {data.PrivacyLevel == 6 && data.MainPage && (data.Id == data.MainPage.ID) &&
                 <DesignEditor setStyle = {setStyle} className = {'.main'} Id = {data.Id} defaultStyle = {defaultStyle} hash = {data.Hash}/> 
             }       
             <section className='cogicontainer' style = {style}>
@@ -882,6 +882,20 @@ function SiteComponent(props) {
                         <SiteButtons data={data} auth={auth} />
                     )}
                 </div>
+
+                {/*
+                  Тханка-навигатор (круг/иконостас) полагается любой
+                  тханке, в том числе «Странице сайта» (канон cogi.teka.ru):
+                  слева — Left(iconostas), справа — контент сайта.
+                */}
+                <Left
+                    data={data}
+                    auth={auth}
+                    interfaceType={'iconostas'}
+                    isPreview={false}
+                    childrenId={''}
+                    isPreviewImage={false}
+                />
 
                 <MainContent
                     data={data}

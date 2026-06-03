@@ -86,7 +86,7 @@ function ContentList(props) {
             <table>
             <tbody>
             {current.map((elem, i) => (
-                <>
+                <React.Fragment key={(elem.LinkID != null ? elem.LinkID : (elem.ID != null ? elem.ID : 'row')) + '-' + i}>
                     {!(elem.Type != undefined && elem.Type == 'category') &&
                     <>
                         { isBigScreen && 
@@ -163,7 +163,7 @@ function ContentList(props) {
                         }
                     </>
                     }
-                </>
+                </React.Fragment>
             ))}
             </tbody>
             </table>

@@ -30,12 +30,25 @@ async def save_thanka_picture(
 
     coeff = size_w / new_w
 
-    left = int(float(coords.get("left", 0)) * coeff)
-    top = int(float(coords.get("top", 0)) * coeff)
-    width = int(float(coords.get("width", size_w)) * coeff)
-    height = int(float(coords.get("height", size_h)) * coeff)
+    def _to_float(value: Any, default: float) -> float:
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return default
+        return v if v > 0 else default
 
-    cropped = source.crop((left, top, left + width, top + height))
+    left = int(_to_float(coords.get("left"), 0) * coeff)
+    top = int(_to_float(coords.get("top"), 0) * coeff)
+    # если width/height не заданы или 0 — берём полный размер исходника (в координатах new_*)
+    width = int(_to_float(coords.get("width"), new_w) * coeff)
+    height = int(_to_float(coords.get("height"), new_h) * coeff)
+
+    right = min(left + width, size_w)
+    bottom = min(top + height, size_h)
+    if right <= left or bottom <= top:
+        left, top, right, bottom = 0, 0, size_w, size_h
+
+    cropped = source.crop((left, top, right, bottom))
     thumb = cropped.resize((350, 350))
 
     if save_to.exists():

@@ -96,9 +96,13 @@ function SelecterType(props) {
     return (
         <>
             <p>Тип:</p>
-            <select onChange={(e) => setSelectedType(e.target.value)} disabled={type == 'edit' ? "disabled" : ""}>
+            <select
+                onChange={(e) => setSelectedType(e.target.value)}
+                disabled={type == 'edit' ? "disabled" : ""}
+                defaultValue={(options.find((o) => o.selected) || {}).value || ""}
+            >
                 {options.map((op) => (
-                    <option value={op.value} defaultValue={op.selected ? op.value : ""}>{op.text}</option>
+                    <option key={op.value} value={op.value}>{op.text}</option>
                 ))}
             </select>
         </>
@@ -112,9 +116,9 @@ function AvatarList(props) {
     return (
         <>
             <p>Аватар:</p>
-            <select onChange={(e) => setSelectedAuthor(e.target.value)}>
+            <select onChange={(e) => setSelectedAuthor(e.target.value)} defaultValue={authorId || ""}>
                 {list.map((avatar) => (
-                    <option value={avatar.ID} selected={avatar.ID == authorId ? 'selected' : ""} >{avatar.Name}</option>
+                    <option key={avatar.ID} value={avatar.ID}>{avatar.Name}</option>
                 ))}
             </select>
         </>
@@ -277,10 +281,22 @@ function EditorInner(props) {
     const annotationRef = useRef(type == 'edit' ? data.Thanka.Annotation : '');
 
     //выбор типа. Тут массив, поэтому такие огороды нагорожены, иначе не отправляет.
-    const [selectedType, setSelectedType] = useState(type == 'edit' ? (data.SectorLink != undefined && data.Object.Type != "repost" ? "link" : data.Object.Type) : GetTypeByParentType(data.Object.Type));
+    // Гарантируем непустой дефолт: если GetTypeByParentType вернёт undefined/null —
+    // падаем в «article». Это убирает симптом «Object.Type='' прилетает на бэк».
+    const [selectedType, setSelectedType] = useState(
+        (type == 'edit'
+            ? (data.SectorLink != undefined && data.Object.Type != "repost" ? "link" : data.Object.Type)
+            : GetTypeByParentType(data.Object.Type)
+        ) || "article"
+    );
 
-    //имя тханки, с ним все понятно: редактирование - старое, создание - пустое.
-    const nameref = useRef(type == 'edit' ? data.Thanka.Name : '');
+    //имя тханки. Раньше был хрупкий useRef с onChange-присваиванием
+    // в .current (и невалидным пропсом refs={...}) — приводило к тому,
+    // что в бэк уходила пустая строка в Thanka.Name. Переводим на нормальное useState.
+    const [name, setName] = useState(type == 'edit' ? (data.Thanka.Name || '') : '');
+    // nameref остаётся для обратной совместимости с остальным кодом, но синхронизируется из state.
+    const nameref = useRef(type == 'edit' ? (data.Thanka.Name || '') : '');
+    nameref.current = name;
 
     //количество секторов, все понятно
     const [selectedSectors, setSelectedSectors] = useState(type == 'edit' ? data.Thanka.SectorsNum : 12);
@@ -341,14 +357,14 @@ function EditorInner(props) {
 
     useEffect(() => {
 
-        if (type != 'edit' && data.AvatarList !== null) {
+        if (type != 'edit' && data.AvatarList !== null && data.AvatarList !== undefined) {
             if (data.PrivacyLevel == 6) {
-                if (data.Object.Type == 'avatar') {
+                if (data.Object && data.Object.Type == 'avatar') {
                     setSelectedAuthor(data.Id);
-                } else {
+                } else if (data.Thanka) {
                     setSelectedAuthor(data.Thanka.Author)
                 }
-            } else {
+            } else if (Array.isArray(data.AvatarList) && data.AvatarList.length > 0) {
                 setSelectedAuthor(data.AvatarList[0].ID);
             }
         }
@@ -511,33 +527,75 @@ function EditorInner(props) {
         }
 
         if (dataToEditor.Thanka.Name != "" && checkedURL) {
-            axios({
-                method: "post",
-                url: PATH + "thanka/setThanka.php",
-                //данные отправятся в $_POST и $_FILES, а то мы не вытащим оттуда картинку
-                headers: { "content-type": "multipart/form-data" },
-                data: dataToEditor,
-            }).then((result) => {
+            // axios 0.27 не умеет сериализовывать вложенные объекты
+            // (Thanka, Object, ...) в multipart/form-data — они прилетают на бэк
+            // строкой "[object Object]", поэтому все поля формы (Name, Type,
+            // CustomURL, ParentId) терялись, и созданные тханки получали
+            // дефолтные значения («Новая тханка» / type='article').
+            //
+            // Бэк умеет application/json (read_request_data: если content-type
+            // содержит "application/json" — берёт await request.json()), поэтому
+            // при отсутствии файлов отправляем JSON. Если в будущем нужны
+            // файлы — ветка с multipart будет собирать FormData вручную.
+            const hasFile = (
+                (selectedPictureSend && typeof selectedPictureSend !== "string")
+                || (typeof selectedPDF === "object" && selectedPDF !== null)
+            )
+
+            const axiosCfg = hasFile
+                ? {
+                    method: "post",
+                    url: PATH + "thanka/setThanka.php",
+                    headers: { "content-type": "multipart/form-data" },
+                    data: dataToEditor,
+                  }
+                : {
+                    method: "post",
+                    url: PATH + "thanka/setThanka.php",
+                    headers: { "content-type": "application/json" },
+                    data: dataToEditor,
+                  }
+
+            axios(axiosCfg).then((result) => {
                 if (result.data != null) {
-                    if (customURL != "") {
-                        if (selectedType == 'avatar') {
-                            window.location.assign("/@" + customURL);
-                        } else {
-                            window.location.assign("/" + customURL);
-                        }
-                    } else {
-                        if (result.data.DocPath == "") {
-                            if (dataToEditor.Id == "") {
-                                if (type == "add" && selectedType != "link" && selectedType != "repost") {
-                                    addLink(result.data.Id, data.Id)
-                                }
+                    // Навигация по канону Cogiteka:
+                    //   avatar  → /@login
+                    //   всё остальное ↑ если есть CustomURL — /CustomURL
+                    //                 иначе fallback /navigator/<UUID> (бэк-резолвер
+                    //                 всё равно найдёт тханку по UUID).
+                    if (selectedType == 'avatar' && customURL != "") {
+                        window.location.assign("/@" + customURL);
+                    }
+                    else if (result.data.DocPath == "" || result.data.DocPath == undefined) {
+                        // CustomURL из ответа бэка (источник правды) — важно:
+                        // это именно то, что реально сохранилось в БД, а не то, что
+                        // пользователь вводил в форму.
+                        const savedCustomURL = (
+                            (result.data.Thanka && result.data.Thanka.CustomURL) ||
+                            result.data.CustomURL ||
+                            ""
+                        ).toString().trim()
+
+                        if (dataToEditor.Id == "") {
+                            // create / createsite / add
+                            if (type == "add" && selectedType != "link" && selectedType != "repost") {
+                                addLink(result.data.Id, data.Id)
+                            }
+                            if (savedCustomURL) {
+                                window.location.assign("/" + savedCustomURL);
+                            } else {
                                 window.location.assign("/navigator/" + result.data.Id);
+                            }
+                        } else {
+                            // edit — есть Id редактируемой тханки
+                            if (savedCustomURL) {
+                                window.location.assign("/" + savedCustomURL);
                             } else {
                                 window.location.assign("/navigator/" + dataToEditor.Id);
                             }
-                        } else {
-                            window.location.assign("/navigator/" + result.data.DocPath);
                         }
+                    } else {
+                        window.location.assign("/navigator/" + result.data.DocPath);
                     }
                 }
             }).catch((error) => {
@@ -591,9 +649,9 @@ function EditorInner(props) {
                             <p>Название: </p>
                         }
 
-                        <input onChange={(e) => nameref.current = e.target.value}
-                            defaultValue={type == 'edit' ? data.Thanka.Name : ''}
-                            refs={nameref}
+                        <input
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
                             disabled={selectedType == "hashtag" ? 'disabled' : ""}
                         />
 
@@ -682,7 +740,12 @@ function EditorInner(props) {
                 ) : (
                     <>
                         {(((data.PrivacyLevel === 6 || data.PrivacyLevel === 5 || data.PrivacyLevel === 3) && (type == 'add' || type == 'create')) || type == 'edit' ) && (
-                            <button type="submit" onClick={() => FormSubmittionHandler("create")}> Сохранить </button>
+                            <button
+                                type="submit"
+                                onClick={() => FormSubmittionHandler("create")}
+                                disabled={!name || name.trim() === ""}
+                                title={!name || name.trim() === "" ? "Введите название тханки" : ""}
+                            > Сохранить </button>
                         )}
                     </>
                 )}

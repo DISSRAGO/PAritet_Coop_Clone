@@ -139,10 +139,17 @@ fi
 echo "[5/6] Starting UI on :$UI_PORT ..."
 # webpack-dev-server тоже может оставлять зомби-процессы,
 # поэтому чистим аналогично backend'у.
+# Двухфазное гашение (SIGTERM → 1с → SIGKILL): даёт webpack-dev-server
+# закрыть открытые WS-соединения и освободить порт корректно. Без этого
+# при перезапуске иногда оставались висящие WebSocket-хендлы, и новый
+# инстанс не мог сразу принять подключения.
 if [ -f "$UI_DIR/.npm.pid" ]; then
   kill "$(cat "$UI_DIR/.npm.pid")" 2>/dev/null || true
   rm -f "$UI_DIR/.npm.pid"
 fi
+pkill -TERM -f "react-scripts start" 2>/dev/null || true
+pkill -TERM -f "webpack" 2>/dev/null || true
+sleep 1
 pkill -9 -f "react-scripts start" 2>/dev/null || true
 pkill -9 -f "webpack" 2>/dev/null || true
 if command -v fuser >/dev/null 2>&1; then

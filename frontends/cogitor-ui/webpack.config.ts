@@ -26,11 +26,39 @@ const devServer: DevServerConfiguration = {
 
   historyApiFallback: true,
 
+  // Явно фиксируем тип WS-сервера. webpack-dev-server по умолчанию
+  // и так использует ws, но без явного указания клиент в браузере
+  // иногда промахивается с протоколом при port-forwarding.
+  webSocketServer: "ws",
+
   client: {
     overlay: {
       errors: true,
       warnings: false,
     },
+
+    // Явный webSocketURL клиента. Без него браузер вычисляет URL
+    // из location.host + дефолтный путь, и при доступе через SSH
+    // local-port-forward (-L 3001:127.0.0.1:3001) промахивается:
+    // клиент пытается коннектиться к auto-угаданному хосту, который
+    // на стороне сервера не резолвится → в DevTools получаем
+    // "[webpack-dev-server] Disconnected! Trying to reconnect..."
+    // и hot reload перестаёт работать до перезагрузки страницы.
+    // hostname:0.0.0.0 + port:0 заставляет клиент использовать
+    // именно тот origin, через который страница была загружена —
+    // то есть localhost:3001 в браузере девелопера.
+    webSocketURL: {
+      hostname: "0.0.0.0",
+      port: 0,
+      protocol: "ws",
+      pathname: "/ws",
+    },
+
+    // Сокращаем количество попыток reconnect до 10 (вместо дефолтных
+    // бесконечных) — этого достаточно для типичных кратковременных
+    // обрывов SSH-туннеля, но не плодит сотни записей в DevTools-консоли
+    // если сервер реально упал.
+    reconnect: 10,
   },
 
   proxy: {
@@ -175,6 +203,16 @@ const config: Configuration = {
       overlay: false,
     }),
   ].filter(Boolean)) as WebpackPluginInstance[],
+
+  // На SSH/смонтированных ФС inotify-события иногда теряются —
+  // включаем polling-fallback. 1000мс — компромисс между задержкой
+  // подхвата изменений (≤1с) и нагрузкой на CPU. ignored для
+  // node_modules чтобы polling не молотил впустую тысячи файлов.
+  watchOptions: {
+    poll: 1000,
+    aggregateTimeout: 300,
+    ignored: /node_modules/,
+  },
 
   devtool: "eval-source-map",
 

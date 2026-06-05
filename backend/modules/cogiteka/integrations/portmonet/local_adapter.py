@@ -320,6 +320,9 @@ class LocalCogiAdapter:
                 "Type": obj_type,
                 "Description": content.get("description") or "",
                 "Name": thanka_obj["Name"],
+                # Object.Filename читает CogObject.jsx для отрисовки
+                # iframe с PDF-файлом (DIRPATH+"/pdf/"+object.Filename).
+                "Filename": content.get("filename") or "",
             },
             "MainPage": top_main_page,
             "Hash": top_hash,
@@ -545,7 +548,15 @@ class LocalCogiAdapter:
             (thanka_id, _json_dumps(content)),
         )
 
-        return {"Id": thanka_id}
+        # Отдаём фронту свежий CustomURL из базы — submitThanka.js использует
+        # его для redirect после сабмита. Без этого фронт падал в
+        # fallback /navigator/{uuid}, даже если в БД custom_url остался прежним.
+        custom_url = str(content.get("custom_url") or "").strip()
+        return {
+            "Id": thanka_id,
+            "CustomURL": custom_url,
+            "Thanka": {"Id": thanka_id, "CustomURL": custom_url},
+        }
 
     def _h_get_my_thanka(self, params: dict) -> dict:
         login = str(params.get("Login") or "")
@@ -587,20 +598,46 @@ class LocalCogiAdapter:
         lookup = url.lstrip("@")
         if not lookup:
             return {"result": False, "Result": False}
+
+        # При редактировании тханка сама себе «занимает» свой custom_url —
+        # без этого жест «Проверить» на неизменном адресе всегда
+        # выдаёт «адрес занят». excludeId / ExcludeId / Id — UUID текущей
+        # тханки, её исключаем из проверки.
+        exclude_id = str(
+            params.get("excludeId")
+            or params.get("ExcludeId")
+            or params.get("Id")
+            or ""
+        ).strip()
+
         # custom_url хранится в cogobject.current_content (jsonb), а не в
         # колонке thanka — иначе бы SELECT падал 500-кой при каждой проверке
         # адреса в форме создания тханки. status фильтруем по таблице thanka.
-        rows = _q(
-            """
-            SELECT 1
-              FROM cogobject co
-              JOIN thanka t ON t.thanka_id = co.thanka_id
-             WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
-               AND t.status <> 'deleted'
-             LIMIT 1
-            """,
-            (lookup,),
-        )
+        if exclude_id:
+            rows = _q(
+                """
+                SELECT 1
+                  FROM cogobject co
+                  JOIN thanka t ON t.thanka_id = co.thanka_id
+                 WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
+                   AND t.status <> 'deleted'
+                   AND t.thanka_id::text <> %s
+                 LIMIT 1
+                """,
+                (lookup, exclude_id),
+            )
+        else:
+            rows = _q(
+                """
+                SELECT 1
+                  FROM cogobject co
+                  JOIN thanka t ON t.thanka_id = co.thanka_id
+                 WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
+                   AND t.status <> 'deleted'
+                 LIMIT 1
+                """,
+                (lookup,),
+            )
         taken = bool(rows)
         return {"result": taken, "Result": taken}
 
@@ -716,6 +753,13 @@ class LocalCogiAdapter:
                 content["description"] = obj.get("Description")
             if obj.get("Type"):
                 content["type"] = obj.get("Type")
+            # Object.Filename — имя PDF, загруженного через pdfDownloader.
+            # Без сохранения в current_content PDF осиротевает:
+            # файл лежит в PDF_DIR, но тханка о нём не знает и
+            # CogObject.jsx не рисует iframe.
+            # Пустая строка — явное удаление файла (сбрасываем).
+            if obj.get("Filename") is not None:
+                content["filename"] = str(obj.get("Filename") or "")
         content.setdefault("description", "")
         content.setdefault("type", "article")
 

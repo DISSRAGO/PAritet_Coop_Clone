@@ -8,12 +8,17 @@ import { PATH, SITE } from "../../utils/url.js";
 // продолжали работать без правок.
 export function CustomURL(props) {
 
-    const { customURL, setCustomURL, type, checkedURL, setCheckedURL, defaultURL } = props
+    const { customURL, setCustomURL, type, checkedURL, setCheckedURL, defaultURL, currentId } = props
 
     //const [url, setUrl] = useState("")
     const [error, showError] = useState(false)
     const [errorText, setErrorText] = useState("Недопустимые символы")
     const regexp = /[aA-zZ0-9\-\_]+/
+
+    // Нормализуем сравнение адресов: trim + lowercase. Иначе "WoC" и
+    // "woc" / "WoC " уходят на бэк и тханка сама себе говорит «занят».
+    const norm = (v) => String(v || "").trim().toLowerCase()
+    const sameAsDefault = (val) => norm(val) === norm(defaultURL)
 
     const onChangeUrl = (e) => {
         setErrorText("Недопустимые символы")
@@ -26,18 +31,27 @@ export function CustomURL(props) {
         else if ((e.target.value == "") || (reg != null && e.target.value != "" && reg[0] == reg['input'])) {
             showError(false)
         }
-        if (defaultURL != e.target.value) {
+        if (!sameAsDefault(e.target.value)) {
             setCheckedURL(false)
+        } else {
+            // Вернули поле к исходному значению — повторная проверка не нужна.
+            setCheckedURL(true)
         }
     }
 
     function checkURL() {
-        if (customURL != defaultURL) {
+        if (!sameAsDefault(customURL)) {
             axios({
                 method: "post",
                 url: PATH + 'thanka/thanka.php',
                 headers: { "content-type": "multipart/form-data" },
-                data: { method: "checkCustomURL", url: (type == 'avatar' ? '@' + customURL.toLowerCase() : customURL.toLowerCase())},
+                data: {
+                    method: "checkCustomURL",
+                    url: (type == 'avatar' ? '@' + customURL.toLowerCase() : customURL.toLowerCase()),
+                    // excludeId — UUID редактируемой тханки, бэк исключает
+                    // её из проверки, чтобы тханка не «занимала» свой же адрес.
+                    excludeId: currentId || "",
+                },
             }).then((result) => {
                 if (result.data.result) {
                     setErrorText("Данный адрес уже занят")

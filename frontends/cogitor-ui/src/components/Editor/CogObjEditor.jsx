@@ -13,32 +13,50 @@ function PDFDownloader(props) {
     const [systemMessageText, setSystemMessageText] = useState("");
     const [systemMessageType, setSystemMessageType] = useState("none")
 
+    // Локальный blob URL для превью только что выбранного файла
+    // до того, как он успешно улетел на сервер и вернулся filename.
+    // Чистим в useEffect через URL.revokeObjectURL, иначе течет память.
+    const [localPreview, setLocalPreview] = useState({ url: "", name: "" });
+
+    useEffect(() => {
+        return () => {
+            if (localPreview.url) URL.revokeObjectURL(localPreview.url);
+        };
+    }, [localPreview.url]);
+
     const onChangePDF = (e) => {
-        if (e.target.files[0].type == 'application/pdf') {
+        const file = e.target.files[0];
+        if (!file) return;
 
-            var formData = new FormData();
-            formData.append("file", e.target.files[0]);
-            formData.append("selectedPDF", selectedPDF)
-
-            axios({
-                method: "post",
-                url: PATH + 'pdfDownloader.php',
-                headers: { "content-type": "multipart/form-data" },
-                data: formData
-            })
-            .then((result) => {
-                setSelectedPDF(result.data.filename);
-                setSystemMessageText("Файл загружен");
-                setSystemMessageType("success")
-            })
-            .catch((error) => {
-                setSystemMessageText("Произошла ошибка");
-                setSystemMessageType("error")
-            })
-        } else {
+        if (file.type !== 'application/pdf') {
             setSystemMessageText("Выберите другой файл");
-            setSystemMessageType("warning")
+            setSystemMessageType("warning");
+            return;
         }
+
+        // Отрисовываем локальное превью сразу — до ответа бэка.
+        if (localPreview.url) URL.revokeObjectURL(localPreview.url);
+        setLocalPreview({ url: URL.createObjectURL(file), name: file.name });
+
+        var formData = new FormData();
+        formData.append("file", file);
+        formData.append("selectedPDF", selectedPDF);
+
+        axios({
+            method: "post",
+            url: PATH + 'pdfDownloader.php',
+            headers: { "content-type": "multipart/form-data" },
+            data: formData
+        })
+        .then((result) => {
+            setSelectedPDF(result.data.filename);
+            setSystemMessageText("Файл загружен");
+            setSystemMessageType("success")
+        })
+        .catch((error) => {
+            setSystemMessageText("Произошла ошибка");
+            setSystemMessageType("error")
+        });
     };
 
     const deletePDF = (e) => {
@@ -50,6 +68,8 @@ function PDFDownloader(props) {
         })
         .then((result) => {
             setSelectedPDF("");
+            if (localPreview.url) URL.revokeObjectURL(localPreview.url);
+            setLocalPreview({ url: "", name: "" });
             setSystemMessageText("Файл удален");
             setSystemMessageType("success")
         })
@@ -59,18 +79,34 @@ function PDFDownloader(props) {
         })
     }
 
+    // Источник для iframe: предпочитаем реально загруженный файл с сервера,
+    // но если сервер ещё не ответил — показываем локальный blob.
+    const hasServerFile = selectedPDF != null && selectedPDF != undefined && selectedPDF != "";
+    const previewSrc = hasServerFile ? (DIRPATH + "/pdf/" + selectedPDF) : localPreview.url;
+    const previewName = hasServerFile ? selectedPDF : localPreview.name;
+
     return (
         <>
         <p>Загрузить файл PDF:</p>
-        {(selectedPDF != null && selectedPDF != undefined && selectedPDF != "") && 
-            <>
-                <iframe src = {DIRPATH+"/pdf/"+selectedPDF}/>
-                <button onClick={deletePDF}>Удалить файл</button>
-            </>
-        }
+        {previewSrc && (
+            <div className="pdfPreview">
+                <p className="pdfPreviewName">Текущий файл: {previewName}</p>
+                <iframe
+                    src={previewSrc}
+                    title="PDF превью"
+                    width="100%"
+                    height="500"
+                    style={{ border: "1px solid #ccc" }}
+                />
+                {hasServerFile && (
+                    <button onClick={deletePDF}>Удалить файл</button>
+                )}
+            </div>
+        )}
         <input
             id="file"
             type="file"
+            accept="application/pdf"
             onChange={onChangePDF}
         />
         <SystemMessage messageText = {systemMessageText} setMessageText = {setSystemMessageText} status = {systemMessageType} setStatus = {setSystemMessageType} />

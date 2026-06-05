@@ -107,7 +107,14 @@ function EditorInner(props) {
 
     const [params, setParams] = useState({});
 
-    const [customURL, setCustomURL] = useState(type == 'edit' ? data.CustomURL : '');
+    // Исходный адрес из редактируемой тханки. Бэк отдаёт его в data.Thanka.CustomURL
+    // (см. _h_get_thanka). Старый вариант data.CustomURL оставлен фоллбэком
+    // на случай, если в какой-нибудь ветви бэка он приходит верхнеуровневым.
+    const [customURL, setCustomURL] = useState(
+        type == 'edit'
+            ? ((data.Thanka && data.Thanka.CustomURL) || data.CustomURL || '')
+            : ''
+    );
     const [checkedURL, setCheckedURL] = useState(true);
 
     //стихии
@@ -138,7 +145,8 @@ function EditorInner(props) {
         }
 
         if (selectedType == 'avatar' && type == 'edit') {
-            setCustomURL(data.CustomURL.substr(1))
+            const src = (data.Thanka && data.Thanka.CustomURL) || data.CustomURL || "";
+            setCustomURL(src.startsWith('@') ? src.substr(1) : src);
         }
 
     }, []);

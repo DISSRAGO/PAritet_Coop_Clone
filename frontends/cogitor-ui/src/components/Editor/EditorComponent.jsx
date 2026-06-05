@@ -1,286 +1,32 @@
 import React, { useState, useEffect } from "react";
-import { createBrowserHistory } from "history";
-import axios from "axios";
-import { PATH, DIRPATH, SITE } from "../../utils/url.js";
-import TextEditorJD from "../../components/TextEditor/Jodit.jsx"
 import "../../style/thanka.css";
 
-import { PrivacySettins } from "./PrivacySettings.jsx";
+import { SystemMessage } from "../Viewer/SystemMessage.jsx";
+
+import { GetTypeByParentType } from "./SelecterType.jsx";
+import EditorContentSection from "./EditorContentSection.jsx";
+import EditorDisplaySection from "./EditorDisplaySection.jsx";
+import EditorButtons from "./EditorButtons.jsx";
+import { submitThanka } from "./submitThanka.js";
 
 import { TrueDateForEditor } from "../../utils/language_ru.js";
 
-const history = createBrowserHistory();
+// Реэкспорт CustomURL — внешние потребители (EditorSite.jsx)
+// импортируют его именованно из этого файла.
+export { CustomURL } from "./CustomURL.jsx";
 
-import CogObjectEditor from "./CogObjEditor.jsx";
-import { RequestEditor } from "./RequestEditor.jsx"
-import { SystemMessage } from "../Viewer/SystemMessage.jsx";
-import { SimpleTableList, SimpleProductList } from "../Table/TableList.jsx";
-
-//ЕСЛИ НЕ ДЕЛАТЬ РАЗДЕЛЕНИЕ ПО create/edit, БУДУТ ПОДСТАВЛЯТЬСЯ ДАННЫЕ ТЕКУЩЕЙ ТХАНКИ
-function GetTypeByParentType(objType) {
-
-    let type = "article";
-
-    if (objType == "cabinet") type = "avatar";
-    if (objType == "collection") type = "collection";
-
-    return type;
-}
-
-function SelecterType(props) {
-
-    let TypeName = "";
-
-    const { defaultValue, parentType, type, setSelectedType } = props;
-
-    switch (defaultValue) {
-        case "article": { TypeName = "Статья"; break; }
-        case "avatar": { TypeName = "Аватар"; break; }
-        case "collection": { TypeName = "Коллекция"; break; }
-        case "catalog": { TypeName = "Каталог"; break; }
-        case "cabinet": { TypeName = "Кабинет"; break; }
-        case "document": { TypeName = "Документ"; break; }
-        case "hashtag": { TypeName = "Хэштег"; break; }
-        case "request": { TypeName = "Бот"; break; }
-        case "link": { TypeName = (type == "add" ? "Ссылка на текущую тханку" : "Ссылка"); break; }
-        case "repost": { TypeName = (type == "add" ? "Репост на текущую тханку" : "Репост"); break; }
-        case "product": { TypeName = "Товар"; break; }
-        case "site": { TypeName = "Сайт"; break; }
-    }
-
-    let defaultOption = { value: defaultValue, text: TypeName, selected: true };
-    let optionAvatar = { value: "avatar", text: "Аватар", selected: false };
-    let optionArticle = { value: "article", text: "Статья", selected: false };
-    let optionCatalog = { value: "catalog", text: "Каталог", selected: false };
-    let optionCollection = { value: "collection", text: "Коллекция", selected: false };
-    let optionDocument = { value: "document", text: "Документ", selected: false };
-    let optionRequest = { value: "request", text: "Бот", selected: false };
-    let optionRepost = { value: "repost", text: type === "add" ? "Репост на текущую тханку" : "Репост", selected: false };
-    let linkRequest = { value: "link", text: type === "add" ? "Ссылка на текущую тханку" : "Ссылка", selected: false };
-    let productRequest = { value: "product", text: "Товар", selected: false };
-    //let optionSite = { value: "site", text: "Сайт", selected: false };
-
-    let nonSpecialOptions = [
-        optionArticle,
-        optionDocument,
-        optionCatalog,
-        optionCollection,
-        optionRequest,
-        linkRequest,
-        productRequest,
-        //optionSite
-    ]
-
-    let options = []
-
-    if (type == 'edit') {
-        options.push(defaultOption);
-    }
-    else if (type === 'create') {
-        if (parentType === 'cabinet') {
-            options.push(optionAvatar)
-        }
-        options = options.concat(nonSpecialOptions)
-    }
-    else if (type === "add") {
-        options.push(optionArticle)
-        options.push(optionDocument)
-        if (parentType != 'cabinet') {
-            options.push(linkRequest)
-        }
-        if (parentType == 'article' || parentType == 'document') {
-            options.push(optionRepost)
-        }
-    }
-
-    return (
-        <>
-            <p>Тип:</p>
-            <select
-                onChange={(e) => setSelectedType(e.target.value)}
-                disabled={type == 'edit' ? "disabled" : ""}
-                defaultValue={(options.find((o) => o.selected) || {}).value || ""}
-            >
-                {options.map((op) => (
-                    <option key={op.value} value={op.value}>{op.text}</option>
-                ))}
-            </select>
-        </>
-    );
-}
-
-function AvatarList(props) {
-
-    const { list, authorId, setSelectedAuthor } = props;
-
-    return (
-        <>
-            <p>Аватар:</p>
-            <select onChange={(e) => setSelectedAuthor(e.target.value)} defaultValue={authorId || ""}>
-                {list.map((avatar) => (
-                    <option key={avatar.ID} value={avatar.ID}>{avatar.Name}</option>
-                ))}
-            </select>
-        </>
-    )
-}
-
-export function CustomURL(props) {
-
-    const { customURL, setCustomURL, type, checkedURL, setCheckedURL, defaultURL } = props
-
-    //const [url, setUrl] = useState("")
-    const [error, showError] = useState(false)
-    const [errorText, setErrorText] = useState("Недопустимые символы")
-    const regexp = /[aA-zZ0-9\-\_]+/
-
-    const onChangeUrl = (e) => {
-        setErrorText("Недопустимые символы")
-        //условия посмотреть, не работает на изначально плохих строках
-        let reg = e.target.value != "" && regexp.exec(e.target.value) != null ? regexp.exec(e.target.value) : null
-        setCustomURL(e.target.value)
-        if ((e.target.value != "" && reg == null) || (reg != null && reg[0] != reg['input'])) {
-            showError(true)
-        } 
-        else if ((e.target.value == "") || (reg != null && e.target.value != "" && reg[0] == reg['input'])) {
-            showError(false)
-        }  
-        if (defaultURL != e.target.value) {
-            setCheckedURL(false) 
-        }
-    }
-
-    function checkURL() {
-        if (customURL != defaultURL) {
-            axios({
-                method: "post",
-                url: PATH + 'thanka/thanka.php',
-                headers: { "content-type": "multipart/form-data" },
-                data: { method: "checkCustomURL", url: (type == 'avatar' ? '@' + customURL.toLowerCase() : customURL.toLowerCase())},
-            }).then((result) => {
-                if (result.data.result) {
-                    setErrorText("Данный адрес уже занят")
-                    showError(true)
-                } else {
-                    setErrorText("Данный адрес можно использовать")
-                    showError(true)
-                    setCheckedURL(true)
-                }
-            }).catch((error) => {
-            })
-        } else {
-            setErrorText("Текущий адрес")
-            showError(true)
-            setCheckedURL(true)
-        }
-    }
-
-    return(
-        <>
-        <p>Введите желаемый URL-адрес:</p>
-        <input /*defaultValue={url}*/ onChange={onChangeUrl} value = {customURL}/>
-        {error && <p>{errorText}</p>}
-        <button  onClick = {(e) => checkURL()} disabled = {error || customURL == ""}>Проверить</button>
-        <button onClick = {(e) => {setCustomURL(""); setErrorText(""); setCheckedURL(true)}}>Удалить</button>
-        <p>Полный URL-адрес страницы будет выглядеть:<input readOnly value={type == 'avatar' ? SITE+'@'+customURL : SITE+customURL}/></p>
-        </>
-    )
-}
-
-function ThankaLinkEditor(props) {
-
-    const { thankaLink, setThankaLink } = props
-
-    const [thankaList, setThankaList] = useState([])
-    const [hash, setHash] = useState()
-
-    const [searchVisible, setSearchVisible] = useState(false)
-
-    function getAllThanka() {
-        setSearchVisible(true)
-        axios({
-            method: "post",
-            url: PATH + 'request/request.php',
-            headers: { "content-type": "multipart/form-data" },
-            data: { method: "getAllThankas", type: "link" },
-        }).then((result) => {
-            setThankaList(typeof result.data.List == 'object' ? Object.values(result.data.List) : result.data.List)
-            setHash(result.data.Hash)
-        }).catch((error) => {
-        })
-    }
-
-    return (
-        <>
-            <p>Введите номер тханки:</p>
-            <input type="text" defaultValue={thankaLink} onChange={(e) => setThankaLink(e.target.value)} />
-            <button onClick={() => getAllThanka()}>Открыть список тханок</button>
-            {searchVisible &&
-                <SimpleTableList list={thankaList} hash={hash} />
-            }
-        </>
-    )
-}
-
-// ProductEditor: временно заменён на заглушку.
+// EditorInner — оркестратор редактора тханки. Хранит весь state
+// формы, разворачивает его в две секции (содержимое + отображение)
+// и блок кнопок. Логика сабмита вынесена в submitThanka.js.
 //
-// По канону V0.51 «Товар» (asset/listing/deal) живёт во фронте
-// «Кооперативный рынок» (отдельная торговая площадка), а не в когитеке.
-// Когитека — лишь один из фронтов экосистемы; subject_id пользователя
-// одинаков на всех фронтах. Источник товаров для типа «Товар» появится
-// тогда, когда оркестратор экосистемы свяжет когитеку с торговой
-// площадкой и вернёт список listing'ов по subject_id владельца.
-//
-// До этого момента запросы getGoodsList/getTvtList/getProducerList
-// уходят в недоступный MARKET_SERVICE и крашат UI. Чтобы пользователь
-// мог сохранить тханку других типов и понимал статус — показываем
-// дружелюбную заглушку, оставляя поле productLink доступным для ручного
-// ввода (если оно уже было заполнено в режиме edit).
-function ProductEditor(props) {
-
-    const { productLink, setProductLink } = props
-
-    return (
-        <div style={{
-            padding: '12px',
-            margin: '8px 0',
-            border: '1px dashed #999',
-            background: '#fafafa',
-            borderRadius: '4px',
-        }}>
-            <p style={{ margin: '0 0 8px 0', fontWeight: 'bold' }}>
-                Источник товаров временно недоступен
-            </p>
-            <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#555' }}>
-                По канону V0.51 товары принадлежат отдельному фронту
-                «Кооперативный рынок». Список товаров появится после
-                подключения оркестратора экосистемы — тогда когитека
-                сможет получить listing'и владельца по его subject_id.
-            </p>
-            <p style={{ margin: '0', fontSize: '13px', color: '#555' }}>
-                ProductId:&nbsp;
-                <input
-                    type="text"
-                    value={productLink || ''}
-                    onChange={(e) => setProductLink(e.target.value)}
-                    placeholder="можно ввести вручную"
-                    style={{ width: '300px' }}
-                />
-            </p>
-        </div>
-    )
-}
-
-//хорошо бы тебя расписать по маленьким кусочкам
+// Раньше этот файл был ~820 строк и держал в одном компоненте 7
+// подкомпонентов, ~30 useState, useEffect, 256-строчный сабмит и весь
+// JSX. После раскола файл превратился в чистый оркестратор state.
 function EditorInner(props) {
 
     let data = props.data.data;
     let auth = props.auth.data;
-    const { type } = props
-
-    let dataToEditor = {};
-    dataToEditor.Thanka = {};
-    dataToEditor.Object = {};
+    const { type } = props;
 
     //сообщения об ошибках
     const [systemMessageText, setSystemMessageText] = useState("");
@@ -291,10 +37,7 @@ function EditorInner(props) {
     const [selectedPictureSend, setSelectedPictureSend] = useState(null);
     const [selectedPicCoord, setPicCoord] = useState({ left: null, top: null, width: null, height: null });
 
-    // аннотация. Раньше был useRef — перевели на useState, так
-    // как Jodit общается с родителем только через onChange (HTML-строка),
-    // и ref-пропс в Jodit всё равно ничего не делает — это была
-    // useRef-в-роли-state без необходимости.
+    // аннотация (Jodit общается через onChange-HTML, потому useState)
     const [annotation, setAnnotation] = useState(type == 'edit' ? (data.Thanka.Annotation || '') : '');
 
     //выбор типа. Тут массив, поэтому такие огороды нагорожены, иначе не отправляет.
@@ -307,9 +50,7 @@ function EditorInner(props) {
         ) || "article"
     );
 
-    // имя тханки. Раньше был useRef — переведен на useState
-    // в предыдущем PR, сейчас убираем зеркальный nameref (никто вне
-    // этого файла его не читает).
+    // имя тханки (после рефакторинга — обычный useState).
     const [name, setName] = useState(type == 'edit' ? (data.Thanka.Name || '') : '');
 
     //количество секторов, все понятно
@@ -318,7 +59,7 @@ function EditorInner(props) {
     //количество кружочков, тоже все понятно
     const [selectedCircles, setSelectedCircles] = useState(type == 'edit' ? data.Thanka.CirclesNum : 1);
 
-    // Содержимое (описание). Аналогично annotation — useState.
+    // Содержимое (описание).
     const [description, setDescription] = useState(type == 'edit' ? (data.Object.Description || '') : '');
 
     //TODO
@@ -357,20 +98,21 @@ function EditorInner(props) {
     const [telNumber, setTelNumber] = useState(type == 'edit' ? data.Object.TelephoneNumber : '');
     const [email, setEmail] = useState(type == 'edit' ? data.Object.Email : '');
 
-    const [thankaLink, setThankaLink] = useState(type == 'edit' && data.SectorLink != undefined && data.SectorLink != null ? data.SectorLink.ID : '')
-    const [productLink, setProductLink] = useState(type == 'edit' ? data.Object.ProductId : "")
-    const [productCategory, setProductCategory] = useState({id: "", name: ""})
+    const [thankaLink, setThankaLink] = useState(type == 'edit' && data.SectorLink != undefined && data.SectorLink != null ? data.SectorLink.ID : '');
+    const [productLink, setProductLink] = useState(type == 'edit' ? data.Object.ProductId : "");
+    const [productCategory, setProductCategory] = useState({ id: "", name: "" });
 
-    // Аватарные дела. Раньше был useRef с двойным смыслом:
-    // ref={avatarNameref} привязывался к DOM input, а onChange перезаписывал
-    // .current строкой — результат был нестабильным (.current мог
-    // оказаться и DOM-узлом, и строкой). Переводим на useState.
+    // Имя аватара (после рефакторинга — обычный useState).
     const [avatarName, setAvatarName] = useState(type == 'edit' ? (data.Object.Name || '') : '');
 
-    const [params, setParams] = useState({})
+    const [params, setParams] = useState({});
 
-    const [customURL, setCustomURL] = useState(type == 'edit' ? data.CustomURL : '')
-    const [checkedURL, setCheckedURL] = useState(true)
+    const [customURL, setCustomURL] = useState(type == 'edit' ? data.CustomURL : '');
+    const [checkedURL, setCheckedURL] = useState(true);
+
+    //стихии
+    const [elemArr, setElemArr] = useState([]);
+    const [selectedElements, setSelectedElements] = useState(elemArr);
 
     useEffect(() => {
 
@@ -401,282 +143,29 @@ function EditorInner(props) {
 
     }, []);
 
-    //стихии
-    const [elemArr, setElemArr] = useState([]);
-    const [selectedElements, setSelectedElements] = useState(elemArr);
-
-    function addLink(from, to) {
-        axios({
-            method: "post",
-            url: PATH + 'thanka/thanka.php',
-            headers: { "content-type": "multipart/form-data" },
-            data: { from: from, to: to, method: "addLink" },
-        }).then((result) => {
-            //setMessage("Ссылка создана");
-        }).catch((error) => {
-            //setMessage("Ошибка");
-        })
-    }
-
-    //отправляем
+    // Сабмит формы. Делегирует submitThanka — все ветвления, FormData,
+    // axios и навигация лежат там.
     function FormSubmittionHandler(buttonType) {
-
-        dataToEditor.EditorType = props.type;
-        dataToEditor.UserId = auth.id;
-        dataToEditor.UserLogin = auth.login;
-
-        dataToEditor.Thanka.CustomURL = selectedType == 'avatar' && customURL != "" ? '@'+customURL : customURL
-
-        dataToEditor.Id = (type == 'create' || type == 'add' ? '' : data.Id);
-        if (buttonType == 'create') {
-            dataToEditor.ParentId = data.Id;
-            dataToEditor.ParentType = data.SectorLink != undefined ? "link" : data.Object.Type;
-        }
-        if (buttonType == 'add') {
-            dataToEditor.ParentId = selectedAuthor;
-        }
-
-        dataToEditor.Angles = selectedAngles;
-        if (selectedElements.length < 4) {
-            let elements = selectedElements;
-            for (let i = 0; i < 4 - elements.length; i++) {
-                elements.push("");
-            }
-            setSelectedElements(elements)
-        }
-        dataToEditor.Elements = selectedElements.join(';');
-        dataToEditor.Picture = selectedPictureSend;
-        dataToEditor.PictureCoords = selectedPicCoord;
-
-        dataToEditor.Thanka.Privacy = selectedPrivacy;
-        if (type != "edit") {
-            if (data.Children != null) {
-                dataToEditor.Thanka.Sort = data.Children.length + 1;
-            } else {
-                dataToEditor.Thanka.Sort = 1
-            }
-        }
-        dataToEditor.Thanka.OthersMakeChildren = selectedType == "cabinet" ? 0 : selectedChild;
-        dataToEditor.Thanka.Comments = selectedType == "cabinet" ? 0 : selectedComments;
-        dataToEditor.Thanka.VisibleElements = selectedAngles
-        dataToEditor.Thanka.Author = selectedAuthor;
-        dataToEditor.Thanka.Name = name;
-        if (dataToEditor.Thanka.Name == "") {
-            setSystemMessageText("Введите название тханки");
-            setSystemMessageStatus("warning")
-        }
-
-        dataToEditor.Thanka.Annotation = annotation;
-
-        dataToEditor.Thanka.CirclesNum = selectedCircles;
-        dataToEditor.Thanka.SectorsNum = selectedSectors;
-
-        dataToEditor.Object.Type = selectedType != "" ? selectedType : data.Object.Type;
-        if (selectedType == "article") {
-            dataToEditor.Object.DateEvent = selectedDateEvent;
-            dataToEditor.LocationEvent = selectedLocation;
-            dataToEditor.Object.Filename = selectedPDF;
-        }
-
-        if (selectedType == "document" || selectedType == "article") {
-            dataToEditor.Object.RealAuthor = selectedRealAuthor;
-            dataToEditor.Object.URL = selectedURL;
-            dataToEditor.Object.Description = description;
-        }
-
-        if (selectedType == "avatar") {
-            dataToEditor.Object.BirthDate = birthDate;
-            dataToEditor.Object.TelephoneNumber = telNumber;
-            dataToEditor.Object.Email = email;
-            dataToEditor.Object.Name = avatarName;
-        }
-
-        if (selectedType == "request") {
-            dataToEditor.Request = {}
-
-            dataToEditor.Request.Fields = params.fieldArr != undefined ? params.fieldArr.join(",") : ""
-            dataToEditor.Request.Picture = params.picture
-
-            dataToEditor.Request.Categories = params.category
-
-            dataToEditor.Request.SortOrder = params.sortOrder
-            dataToEditor.Request.SortField = params.sortField
-            dataToEditor.Request.StartDate = params.startDate
-            dataToEditor.Request.EndDate = params.endDate
-            dataToEditor.Request.QueryName = params.template
-            dataToEditor.Request.SpecialProps = params.specialProps
-
-            //поисковые строчки
-            let search = []
-            if (params.searchName != "") search.push(params.searchName)
-            dataToEditor.Request.SearchString = search.join(";")
-        }
-
-        if (selectedType == "link" || selectedType == "repost") {
-            if (type != "add") {
-                dataToEditor.Thanka.ThankaLink = thankaLink
-            } else {
-                dataToEditor.Thanka.ThankaLink = data.Id
-            }
-        }
-
-        if (selectedType == "product") {
-            if (productLink != "") {
-                dataToEditor.Object.ProductId = productLink
-                dataToEditor.Object.CategoryId = productCategory.id
-                dataToEditor.Object.CategoryName = productCategory.name
-            } else {
-                setSystemMessageText("Выберите товар");
-                setSystemMessageStatus("error")
-            }
-        }
-
-        if (dataToEditor.Thanka.Name != "" && checkedURL) {
-            // axios 0.27 не умеет сериализовывать вложенные объекты
-            // (Thanka, Object, ...) в multipart/form-data — они прилетают на бэк
-            // строкой "[object Object]", поэтому все поля формы (Name, Type,
-            // CustomURL, ParentId) терялись, и созданные тханки получали
-            // дефолтные значения («Новая тханка» / type='article').
-            //
-            // Бэк умеет application/json (read_request_data: если content-type
-            // содержит "application/json" — берёт await request.json()), поэтому
-            // при отсутствии файлов отправляем JSON. Если в будущем нужны
-            // файлы — ветка с multipart будет собирать FormData вручную.
-            const hasFile = (
-                (selectedPictureSend && typeof selectedPictureSend !== "string")
-                || (typeof selectedPDF === "object" && selectedPDF !== null)
-            )
-
-            // axios 0.27 не умеет сериализовывать вложенные объекты в
-            // multipart, поэтому при наличии File собираем FormData вручную
-            // по схеме легаси-PHP: плоские ключи Thanka_Name, Object_Type,
-            // Request_Fields, файл — отдельным полем Picture. Бэк через
-            // build_nested_thanka_form собирает вложенные dict-ы обратно.
-            let axiosCfg
-            if (hasFile) {
-                const fd = new FormData()
-                const appendFlat = (prefix, obj) => {
-                    if (!obj || typeof obj !== "object") return
-                    for (const k of Object.keys(obj)) {
-                        const v = obj[k]
-                        if (v === undefined || v === null) continue
-                        // вложенные объекты не ожидаются здесь, но защита
-                        if (typeof v === "object" && !(v instanceof File) && !(v instanceof Blob)) {
-                            // PictureCoords — единственный вложенный dict,
-                            // его развернём через PictureCoords_top/.. ниже
-                            continue
-                        }
-                        fd.append(`${prefix}_${k}`, v)
-                    }
-                }
-                // плоские ключи Thanka/Object/Request
-                appendFlat("Thanka", dataToEditor.Thanka)
-                appendFlat("Object", dataToEditor.Object)
-                appendFlat("Request", dataToEditor.Request)
-                // верхнеуровневые скаляры
-                for (const k of Object.keys(dataToEditor)) {
-                    if (k === "Thanka" || k === "Object" || k === "Request") continue
-                    if (k === "Picture" || k === "PictureCoords") continue
-                    const v = dataToEditor[k]
-                    if (v === undefined || v === null) continue
-                    if (typeof v === "object") continue
-                    fd.append(k, v)
-                }
-                // PictureCoords развернём в PictureCoords_top/left/width/height
-                if (selectedPicCoord && typeof selectedPicCoord === "object") {
-                    for (const k of ["top", "left", "width", "height"]) {
-                        if (selectedPicCoord[k] !== undefined && selectedPicCoord[k] !== null) {
-                            fd.append(`PictureCoords_${k}`, selectedPicCoord[k])
-                        }
-                    }
-                }
-                // сам файл
-                if (selectedPictureSend && typeof selectedPictureSend !== "string") {
-                    fd.append("Picture", selectedPictureSend)
-                }
-                if (typeof selectedPDF === "object" && selectedPDF !== null) {
-                    fd.append("PDF", selectedPDF)
-                }
-                axiosCfg = {
-                    method: "post",
-                    url: PATH + "thanka/setThanka.php",
-                    // не задаём content-type вручную: axios+браузер выставят
-                    // multipart/form-data с правильным boundary автоматически
-                    data: fd,
-                }
-            } else {
-                axiosCfg = {
-                    method: "post",
-                    url: PATH + "thanka/setThanka.php",
-                    headers: { "content-type": "application/json" },
-                    data: dataToEditor,
-                }
-            }
-
-            axios(axiosCfg).then((result) => {
-                if (result.data != null) {
-                    // Навигация по канону Cogiteka:
-                    //   avatar  → /@login
-                    //   всё остальное ↑ если есть CustomURL — /CustomURL
-                    //                 иначе fallback /navigator/<UUID> (бэк-резолвер
-                    //                 всё равно найдёт тханку по UUID).
-                    // После успеха используем replace, а не assign: иначе нажатие
-                    // "Назад" в браузере вернёт на /create, который восстановится из
-                    // sessionStorage["address"] и покажет редактор только что
-                    // созданной тханки — выглядит как "выкинуло в создание тханки".
-                    // replace убирает /create из истории, и Back ведёт на родителя.
-                    if (selectedType == 'avatar' && customURL != "") {
-                        window.location.replace("/@" + customURL);
-                    }
-                    else if (result.data.DocPath == "" || result.data.DocPath == undefined) {
-                        // CustomURL из ответа бэка (источник правды) — важно:
-                        // это именно то, что реально сохранилось в БД, а не то, что
-                        // пользователь вводил в форму.
-                        const savedCustomURL = (
-                            (result.data.Thanka && result.data.Thanka.CustomURL) ||
-                            result.data.CustomURL ||
-                            ""
-                        ).toString().trim()
-
-                        if (dataToEditor.Id == "") {
-                            // create / createsite / add
-                            if (type == "add" && selectedType != "link" && selectedType != "repost") {
-                                addLink(result.data.Id, data.Id)
-                            }
-                            if (savedCustomURL) {
-                                window.location.replace("/" + savedCustomURL);
-                            } else {
-                                window.location.replace("/navigator/" + result.data.Id);
-                            }
-                        } else {
-                            // edit — есть Id редактируемой тханки
-                            if (savedCustomURL) {
-                                window.location.replace("/" + savedCustomURL);
-                            } else {
-                                window.location.replace("/navigator/" + dataToEditor.Id);
-                            }
-                        }
-                    } else {
-                        window.location.replace("/navigator/" + result.data.DocPath);
-                    }
-                }
-            }).catch((error) => {
-                setSystemMessageText("Произошла ошибка");
-                setSystemMessageStatus("error")
-            })
-        } else {
-            if (dataToEditor.Thanka.Name == "") {
-                setSystemMessageText("Введите название");
-                setSystemMessageStatus("error")
-            }
-            if (!checkedURL) {
-                setSystemMessageText("Проверьте введенный адрес страницы");
-                setSystemMessageStatus("error")
-            }
-        }
+        submitThanka({
+            buttonType,
+            type, data, auth,
+            name, annotation, description, avatarName,
+            selectedType, selectedAuthor,
+            selectedPrivacy, selectedChild, selectedComments, selectedAngles,
+            selectedSectors, selectedCircles,
+            selectedElements, setSelectedElements,
+            selectedPictureSend, selectedPicCoord,
+            selectedDateEvent, selectedLocation, selectedPDF,
+            selectedRealAuthor, selectedURL,
+            birthDate, telNumber, email,
+            params,
+            thankaLink,
+            productLink, productCategory,
+            customURL, checkedURL,
+            setSystemMessageText, setSystemMessageStatus,
+        });
     }
-    //type = {type} это про то, какой редактор вызывается - создания или редактирования
-    //cogType - про тип когобъекта
+
     return (
         <>
             <SystemMessage messageText={systemMessageText} setMessageText={setSystemMessageText} status={systemMessageStatus} setStatus={setSystemMessageStatus} />
@@ -690,132 +179,55 @@ function EditorInner(props) {
                     </h2>
                 )}
             </div>
-            <section className="lil-container">
-                <h3>Настройки содержимого</h3>
-                {data.Object.VersionStamp == true && type == "edit" && data.SectorLink == undefined ? (
-                    <p>Редактирование содержимого недоступно</p>
-                ) : (
-                    <>
-                        {data.Id != "" && data.Id !== undefined && (
-                            <SelecterType
-                                type={type}
-                                parentType={((type == 'create' || type == "add") && (data.SectorLink != undefined ? "link" : data.Object.Type))}
-                                defaultValue={selectedType}
-                                setSelectedType={setSelectedType}
-                            />
-                        )}
 
-                        {selectedType == 'avatar' ?
-                            <p>Имя (будет отображаться на сайте):</p>
-                            :
-                            <p>Название: </p>
-                        }
+            <EditorContentSection
+                data={data} type={type}
+                selectedType={selectedType} setSelectedType={setSelectedType}
+                name={name} setName={setName}
+                selectedAuthor={selectedAuthor} setSelectedAuthor={setSelectedAuthor}
+                annotation={annotation} setAnnotation={setAnnotation}
+                params={params} setParams={setParams}
+                thankaLink={thankaLink} setThankaLink={setThankaLink}
+                productLink={productLink} setProductLink={setProductLink} setProductCategory={setProductCategory}
+                selectedDateEvent={selectedDateEvent} setSelectedDateEvent={setSelectedDateEvent}
+                selectedLocation={selectedLocation} setSelectedLocation={setSelectedLocation}
+                selectedPDF={selectedPDF} setSelectedPDF={setSelectedPDF}
+                selectedRealAuthor={selectedRealAuthor} setSelectedRealAuthor={setSelectedRealAuthor}
+                selectedURL={selectedURL} setSelectedURL={setSelectedURL}
+                birthDate={birthDate} setBirthDate={setBirthDate}
+                telNumber={telNumber} setTelNumber={setTelNumber}
+                email={email} setEmail={setEmail}
+                description={description} setDescription={setDescription}
+                avatarName={avatarName} setAvatarName={setAvatarName}
+            />
 
-                        <input
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            disabled={selectedType == "hashtag" ? 'disabled' : ""}
-                        />
+            <EditorDisplaySection
+                customURL={customURL} setCustomURL={setCustomURL}
+                selectedType={selectedType}
+                checkedURL={checkedURL} setCheckedURL={setCheckedURL}
+                data={data}
+                selectedPrivacy={selectedPrivacy} setSelectedPrivacy={setSelectedPrivacy}
+                selectedChild={selectedChild} setSelectedChild={setSelectedChild}
+                selectedComments={selectedComments} setSelectedComments={setSelectedComments}
+                selectedCircles={selectedCircles} setSelectedCircles={setSelectedCircles}
+                selectedAngles={selectedAngles} setSelectedAngles={setSelectedAngles}
+                selectedSectors={selectedSectors} setSelectedSectors={setSelectedSectors}
+                type={type}
+                elemArr={elemArr} setSelectedElements={setSelectedElements}
+                setSelectedPictureSend={setSelectedPictureSend}
+                setPicCoord={setPicCoord}
+                selectedPicCoord={selectedPicCoord}
+            />
 
-                        {data.AvatarList !== null && selectedType !== 'avatar' && selectedType !== 'cabinet' && (
-                            <AvatarList
-                                list={data.AvatarList}
-                                authorId={selectedAuthor}
-                                setSelectedAuthor={setSelectedAuthor}
-                            />
-                        )}
-
-                        <p>Краткая аннотация</p>
-                        <TextEditorJD
-                            onChange={(e) => setAnnotation(e)}
-                            defaultValue={type == 'edit' ? (data.Thanka.Annotation || '') : ''}
-                        />
-
-                        {selectedType == "request" &&
-                            <RequestEditor setParams={setParams} type={type} request={data.Request} />
-                        }
-                        {selectedType == "link" && type != "add" &&
-                            <ThankaLinkEditor thankaLink={thankaLink} setThankaLink={setThankaLink} />
-                        }
-
-                        {selectedType == "product" && /*type != "add" &&*/
-                            <ProductEditor productLink={productLink} setProductLink={setProductLink} setProductCategory = {setProductCategory}/>
-                        }
-
-                        {selectedType != "request" && selectedType != "link" && selectedType != 'repost' &&
-                            <CogObjectEditor
-                                selectedDateEvent={selectedDateEvent} setSelectedDateEvent={setSelectedDateEvent}
-                                selectedLocation={selectedLocation} setSelectedLocation={setSelectedLocation}
-                                selectedPDF={selectedPDF} setSelectedPDF={setSelectedPDF}
-                                selectedRealAuthor={selectedRealAuthor} setSelectedRealAuthor={setSelectedRealAuthor}
-                                selectedURL={selectedURL} setSelectedURL={setSelectedURL}
-                                birthDate={birthDate} setBirthDate={setBirthDate}
-                                telNumber={telNumber} setTelNumber={setTelNumber}
-                                email={email} setEmail={setEmail}
-                                selectedType={selectedType} data={data} type={type}
-                                description={description}
-                                setDescription={setDescription}
-                                avatarName={avatarName}
-                                setAvatarName={setAvatarName}
-                            />
-                        }
-                    </>
-                )}
-            </section>
-
-            <section className="lil-container">
-                <h3>Настройки отображения</h3>
-                <CustomURL 
-                    customURL = {customURL} 
-                    setCustomURL = {setCustomURL} 
-                    type = {selectedType} 
-                    checkedURL = {checkedURL} 
-                    setCheckedURL = {setCheckedURL}
-                    defaultURL = {data.CustomURL}
-                />
-                <PrivacySettins
-                    selectedPrivacy={selectedPrivacy} setSelectedPrivacy={setSelectedPrivacy}
-                    selectedChild={selectedChild} setSelectedChild={setSelectedChild}
-                    selectedComments={selectedComments} setSelectedComments={setSelectedComments}
-                    selectedCircles={selectedCircles} setSelectedCircles={setSelectedCircles}
-                    selectedAngles={selectedAngles} setSelectedAngles={setSelectedAngles}
-                    selectedSectors={selectedSectors} setSelectedSectors={setSelectedSectors}
-                    selectedType={selectedType} type={type}
-                    elemArr={elemArr} setSelectedElements={setSelectedElements}
-                    data={data}
-                    setSelectedPictureSend={setSelectedPictureSend}
-                    setPicCoord={setPicCoord}
-                    selectedPicCoord={selectedPicCoord}
-                />
-            </section>
-
-            <div className="editorButtons">
-                {type === 'add' ? (
-                    selectedType === 'repost' || selectedType === 'link' ? (
-                        <>
-                            <button type="submit" onClick={() => FormSubmittionHandler("add")}> Сохранить в свое дерево </button>
-                        </>
-                    ) : (
-                        <>
-                            <button type="submit" onClick={() => FormSubmittionHandler("add")}> Сохранить в свое дерево и добавить в ленту </button>
-                        </>
-                    )
-                ) : (
-                    <>
-                        {(((data.PrivacyLevel === 6 || data.PrivacyLevel === 5 || data.PrivacyLevel === 3) && (type == 'add' || type == 'create')) || type == 'edit' ) && (
-                            <button
-                                type="submit"
-                                onClick={() => FormSubmittionHandler("create")}
-                                disabled={!name || name.trim() === ""}
-                                title={!name || name.trim() === "" ? "Введите название тханки" : ""}
-                            > Сохранить </button>
-                        )}
-                    </>
-                )}
-                <button onClick={(e) => history.back()}> Отменить </button>
-            </div>
+            <EditorButtons
+                type={type}
+                selectedType={selectedType}
+                name={name}
+                data={data}
+                onSubmit={FormSubmittionHandler}
+            />
         </>
     );
 }
 
-export default EditorInner
+export default EditorInner;

@@ -49,13 +49,7 @@ function EditorButtons(props) {
                     )}
                 </>
             )}
-            <button type="button" onClick={(e) => {
-                console.log("CANCEL CLICK FIRED v2 (navigate -1)", {
-                    location: window.location.pathname,
-                    historyLen: window.history.length,
-                });
-                navigate(-1);
-            }}> Отменить </button>
+            <button type="button" onClick={(e) => navigate(-1)}> Отменить </button>
         </div>
     );
 }

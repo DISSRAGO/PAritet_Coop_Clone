@@ -13,6 +13,7 @@ from backend.modules.homonet.domains.subject.schemas import (
     SubjectDealsResponse,
     SubjectDecisionsResponse,
     SubjectListingsResponse,
+    SubjectObjectsResponse,
     SubjectSummaryResponse,
     SubjectThankasResponse,
 )
@@ -149,6 +150,23 @@ async def get_subject_summary(
     svc: SubjectService = Depends(get_subject_service),
 ):
     return await svc.get_summary(subject_id)
+
+
+@router.get("/{subject_id}/objects", response_model=SubjectObjectsResponse)
+async def get_subject_objects(
+    subject_id: str,
+    domain: Optional[str] = Query(
+        None,
+        description=(
+            "Список доменов через запятую: thanka,listing,deal,decision,contribution,account. "
+            "Пустое значение — все домены"
+        ),
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    svc: SubjectService = Depends(get_subject_service),
+):
+    return await svc.list_objects(subject_id, domain_param=domain, limit=limit, offset=offset)
 
 
 # ---------- канонические алиасы фасада subject_app_api ---------------------
@@ -290,3 +308,23 @@ async def app_get_subject_summary(
     svc: SubjectService = Depends(get_subject_service),
 ):
     return await svc.get_summary(subject_id)
+
+
+@subject_app_router.get(
+    "/{subject_id}/objects",
+    response_model=SubjectObjectsResponse,
+)
+async def app_get_subject_objects(
+    subject_id: str,
+    domain: Optional[str] = Query(
+        None,
+        description=(
+            "Список доменов через запятую: thanka,listing,deal,decision,contribution,account. "
+            "Пустое значение — все домены"
+        ),
+    ),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    svc: SubjectService = Depends(get_subject_service),
+):
+    return await svc.list_objects(subject_id, domain_param=domain, limit=limit, offset=offset)

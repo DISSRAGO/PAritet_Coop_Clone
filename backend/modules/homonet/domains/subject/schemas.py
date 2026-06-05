@@ -200,3 +200,45 @@ class SubjectSummaryResponse(BaseModel):
     decisionsProposed: int
     contributions: int
     accounts: int
+
+
+# ---------------------------------------------------------------------------
+# Unified objects endpoint (Stage 3, PR 2)
+# ---------------------------------------------------------------------------
+# Единая ручка GET /app/subjects/{id}/objects?domain=thanka,listing&... .
+# Возвращает однородный список объектов разных доменов в одном ответе с
+# дискриминатором `domain`. Используется фронтами, которым нужна смешанная
+# лента владельца (например, профиль subject с разделом «всё, что я сделал»).
+# ---------------------------------------------------------------------------
+
+
+class SubjectObjectItem(BaseModel):
+    """Унифицированный объект subject любого домена.
+
+    Дискриминатор `domain` указывает тип. Полезная нагрузка лежит в `payload`
+    в виде словаря — это позволяет фронту разбирать item по domain без
+    необходимости тянуть отдельные DTO на каждый случай (TypeScript у фронта
+    типизирует union по domain).
+    """
+
+    domain: str  # 'thanka' | 'listing' | 'deal' | 'decision' | 'contribution' | 'account'
+    objectId: str
+    title: str
+    status: Optional[str] = None
+    sortKey: Optional[str] = None  # ISO datetime для сквозной сортировки
+    payload: dict
+
+
+class SubjectObjectsResponse(BaseModel):
+    """Ответ единой ручки /objects: total + per-domain breakdown + items.
+
+    Поле `totals` показывает, сколько объектов в каждом запрошенном домене —
+    это удобно для бейджей-счётчиков в UI без дополнительных запросов.
+    """
+
+    subjectId: str
+    limit: int
+    offset: int
+    total: int
+    totals: dict  # {'thanka': 12, 'listing': 3, ...}
+    items: List[SubjectObjectItem]

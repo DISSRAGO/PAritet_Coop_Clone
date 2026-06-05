@@ -117,8 +117,15 @@ def set_result_arrays(result: dict) -> None:
 
     for field in list_fields:
         items = result.get(field) or []
+        # Защита: если поле вдруг пришло не списком (например,
+        # SOAP-обёрткой {"RegisteredObject": ...}) — пропускаем,
+        # а не падаем AttributeError'ом на item.get.
+        if not isinstance(items, list):
+            continue
 
         for idx, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
             item["Annotation"] = html_decode(item.get("Annotation"))
             item["Image"] = image_flag(item.get("ID"))
 
@@ -402,20 +409,25 @@ def normalize_get_thanka_result(result: dict, thanka_id: str, site_id: str) -> d
 
     result["Hash"] = now_hash()
 
-    if thanka_id:
-        for field in [
-            "Elements",
-            "LocationEvent",
-            "MyThankaList",
-            "SiteList",
-            "MySubscribeList",
-            "DocumentsParts",
-            "Notifications",
-            "LinksTo",
-            "LinksFrom",
-            "LinksSectors",
-        ]:
-            result[field] = registered(result.get(field))
+    # Поля-коллекции, которые set_result_arrays ниже итерирует как list[dict].
+    # Без разворачивания через registered() они остаются SOAP-обёрткой
+    # {"RegisteredObject": [...]}, и итерация по dict отдаёт строку-ключ,
+    # что ломает set_result_arrays при первом item.get(...).
+    # Раньше блок выполнялся только при thanka_id и /sitepage/{uuid}
+    # роняло get_thanka_endpoint 500-кой (AttributeError на item.get).
+    for field in [
+        "Elements",
+        "LocationEvent",
+        "MyThankaList",
+        "SiteList",
+        "MySubscribeList",
+        "DocumentsParts",
+        "Notifications",
+        "LinksTo",
+        "LinksFrom",
+        "LinksSectors",
+    ]:
+        result[field] = registered(result.get(field))
 
     object_data = result.get("Object") or {}
     thanka_data = result.get("Thanka") or {}

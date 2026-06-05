@@ -320,6 +320,9 @@ class LocalCogiAdapter:
                 "Type": obj_type,
                 "Description": content.get("description") or "",
                 "Name": thanka_obj["Name"],
+                # Object.Filename читает CogObject.jsx для отрисовки
+                # iframe с PDF-файлом (DIRPATH+"/pdf/"+object.Filename).
+                "Filename": content.get("filename") or "",
             },
             "MainPage": top_main_page,
             "Hash": top_hash,
@@ -716,6 +719,13 @@ class LocalCogiAdapter:
                 content["description"] = obj.get("Description")
             if obj.get("Type"):
                 content["type"] = obj.get("Type")
+            # Object.Filename — имя PDF, загруженного через pdfDownloader.
+            # Без сохранения в current_content PDF осиротевает:
+            # файл лежит в PDF_DIR, но тханка о нём не знает и
+            # CogObject.jsx не рисует iframe.
+            # Пустая строка — явное удаление файла (сбрасываем).
+            if obj.get("Filename") is not None:
+                content["filename"] = str(obj.get("Filename") or "")
         content.setdefault("description", "")
         content.setdefault("type", "article")
 

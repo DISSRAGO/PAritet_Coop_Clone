@@ -84,7 +84,16 @@ const devServer: DevServerConfiguration = {
 const config: Configuration = {
   mode: "development",
 
-  entry: path.resolve(__dirname, "src", "index.tsx"),
+  // В dev-режиме entry расширяем prelude'ом react-refresh — иначе babel-плагин
+  // рефреша вставляет в транспилированный код вызовы $RefreshReg$/$RefreshSig$, но
+  // их рантайм не загружен — падает "$RefreshReg$ is not defined" в первом
+  // же компоненте (AppFooter.tsx и т.д.).
+  entry: isDevServer
+    ? [
+        "@pmmmwh/react-refresh-webpack-plugin/client/ReactRefreshEntry.js",
+        path.resolve(__dirname, "src", "index.tsx"),
+      ]
+    : path.resolve(__dirname, "src", "index.tsx"),
 
   output: {
     path: path.resolve(__dirname, "dist"),
@@ -104,6 +113,17 @@ const config: Configuration = {
         exclude: /node_modules/,
         use: {
           loader: "babel-loader",
+          options: {
+            // react-refresh/babel подключаем именно здесь, а не в babel.config.json:
+            // babel.config.json подхватывается всеми babel-инстансами в проекте,
+            // включая child compiler'ов вроде html-webpack-plugin — их плагин
+            // ReactRefreshWebpackPlugin не обрабатывает (только лоадеры),
+            // и получали "$RefreshReg$ is not defined" при загрузке первого
+            // компонента (AppFooter.tsx). Локальный plugins[] в webpack-руле
+            // работает только для файлов под этим правилом и не влияет на child
+            // compiler'ы.
+            plugins: isDevServer ? [require.resolve("react-refresh/babel")] : [],
+          },
         },
       },
 

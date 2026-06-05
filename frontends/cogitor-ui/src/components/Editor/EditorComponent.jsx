@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { createBrowserHistory } from "history";
 import axios from "axios";
 import { PATH, DIRPATH, SITE } from "../../utils/url.js";
@@ -291,8 +291,11 @@ function EditorInner(props) {
     const [selectedPictureSend, setSelectedPictureSend] = useState(null);
     const [selectedPicCoord, setPicCoord] = useState({ left: null, top: null, width: null, height: null });
 
-    //аннотация
-    const annotationRef = useRef(type == 'edit' ? data.Thanka.Annotation : '');
+    // аннотация. Раньше был useRef — перевели на useState, так
+    // как Jodit общается с родителем только через onChange (HTML-строка),
+    // и ref-пропс в Jodit всё равно ничего не делает — это была
+    // useRef-в-роли-state без необходимости.
+    const [annotation, setAnnotation] = useState(type == 'edit' ? (data.Thanka.Annotation || '') : '');
 
     //выбор типа. Тут массив, поэтому такие огороды нагорожены, иначе не отправляет.
     // Гарантируем непустой дефолт: если GetTypeByParentType вернёт undefined/null —
@@ -304,13 +307,10 @@ function EditorInner(props) {
         ) || "article"
     );
 
-    //имя тханки. Раньше был хрупкий useRef с onChange-присваиванием
-    // в .current (и невалидным пропсом refs={...}) — приводило к тому,
-    // что в бэк уходила пустая строка в Thanka.Name. Переводим на нормальное useState.
+    // имя тханки. Раньше был useRef — переведен на useState
+    // в предыдущем PR, сейчас убираем зеркальный nameref (никто вне
+    // этого файла его не читает).
     const [name, setName] = useState(type == 'edit' ? (data.Thanka.Name || '') : '');
-    // nameref остаётся для обратной совместимости с остальным кодом, но синхронизируется из state.
-    const nameref = useRef(type == 'edit' ? (data.Thanka.Name || '') : '');
-    nameref.current = name;
 
     //количество секторов, все понятно
     const [selectedSectors, setSelectedSectors] = useState(type == 'edit' ? data.Thanka.SectorsNum : 12);
@@ -318,8 +318,8 @@ function EditorInner(props) {
     //количество кружочков, тоже все понятно
     const [selectedCircles, setSelectedCircles] = useState(type == 'edit' ? data.Thanka.CirclesNum : 1);
 
-    //Содержимое
-    const descriptionRef = useRef(type == 'edit' ? data.Object.Description : '');
+    // Содержимое (описание). Аналогично annotation — useState.
+    const [description, setDescription] = useState(type == 'edit' ? (data.Object.Description || '') : '');
 
     //TODO
     const [selectedAuthor, setSelectedAuthor] = useState(type == 'edit' ? data.Thanka.Author :
@@ -361,8 +361,11 @@ function EditorInner(props) {
     const [productLink, setProductLink] = useState(type == 'edit' ? data.Object.ProductId : "")
     const [productCategory, setProductCategory] = useState({id: "", name: ""})
 
-    //Аватарные дела
-    const avatarNameref = useRef(type == 'edit' ? data.Object.Name : '');
+    // Аватарные дела. Раньше был useRef с двойным смыслом:
+    // ref={avatarNameref} привязывался к DOM input, а onChange перезаписывал
+    // .current строкой — результат был нестабильным (.current мог
+    // оказаться и DOM-узлом, и строкой). Переводим на useState.
+    const [avatarName, setAvatarName] = useState(type == 'edit' ? (data.Object.Name || '') : '');
 
     const [params, setParams] = useState({})
 
@@ -457,17 +460,13 @@ function EditorInner(props) {
         dataToEditor.Thanka.Comments = selectedType == "cabinet" ? 0 : selectedComments;
         dataToEditor.Thanka.VisibleElements = selectedAngles
         dataToEditor.Thanka.Author = selectedAuthor;
-        dataToEditor.Thanka.Name = (nameref.current.value !== undefined ? nameref.current.value : nameref.current);
+        dataToEditor.Thanka.Name = name;
         if (dataToEditor.Thanka.Name == "") {
             setSystemMessageText("Введите название тханки");
             setSystemMessageStatus("warning")
         }
 
-        dataToEditor.Thanka.Annotation = (
-            annotationRef.current.value !== undefined ?
-                annotationRef.current.value :
-                annotationRef.current
-        );
+        dataToEditor.Thanka.Annotation = annotation;
 
         dataToEditor.Thanka.CirclesNum = selectedCircles;
         dataToEditor.Thanka.SectorsNum = selectedSectors;
@@ -482,22 +481,14 @@ function EditorInner(props) {
         if (selectedType == "document" || selectedType == "article") {
             dataToEditor.Object.RealAuthor = selectedRealAuthor;
             dataToEditor.Object.URL = selectedURL;
-            dataToEditor.Object.Description = (
-                descriptionRef.current.value !== undefined ?
-                    descriptionRef.current.value :
-                    descriptionRef.current
-            );
+            dataToEditor.Object.Description = description;
         }
 
         if (selectedType == "avatar") {
             dataToEditor.Object.BirthDate = birthDate;
             dataToEditor.Object.TelephoneNumber = telNumber;
             dataToEditor.Object.Email = email;
-            dataToEditor.Object.Name = (
-                avatarNameref.current.value !== undefined ?
-                    avatarNameref.current.value :
-                    avatarNameref.current
-            );
+            dataToEditor.Object.Name = avatarName;
         }
 
         if (selectedType == "request") {
@@ -736,9 +727,8 @@ function EditorInner(props) {
 
                         <p>Краткая аннотация</p>
                         <TextEditorJD
-                            refs={annotationRef}
-                            onChange={(e) => { annotationRef.current = e }}
-                            defaultValue={type == 'edit' ? data.Thanka.Annotation : ''}
+                            onChange={(e) => setAnnotation(e)}
+                            defaultValue={type == 'edit' ? (data.Thanka.Annotation || '') : ''}
                         />
 
                         {selectedType == "request" &&
@@ -763,8 +753,10 @@ function EditorInner(props) {
                                 telNumber={telNumber} setTelNumber={setTelNumber}
                                 email={email} setEmail={setEmail}
                                 selectedType={selectedType} data={data} type={type}
-                                descriptionRef={descriptionRef}
-                                avatarNameref={avatarNameref}
+                                description={description}
+                                setDescription={setDescription}
+                                avatarName={avatarName}
+                                setAvatarName={setAvatarName}
                             />
                         }
                     </>

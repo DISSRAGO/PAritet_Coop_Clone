@@ -21,6 +21,8 @@ from backend.modules.homonet.domains.subject.schemas import (
     SubjectDecisionsResponse,
     SubjectListingItem,
     SubjectListingsResponse,
+    SubjectObjectItem,
+    SubjectObjectsResponse,
     SubjectSummaryResponse,
     SubjectThankaItem,
     SubjectThankasResponse,
@@ -767,4 +769,361 @@ class SubjectService:
             decisionsProposed=int(row["decisions_proposed"]),
             contributions=int(row["contributions"]),
             accounts=int(row["accounts"]),
+        )
+
+    # -----------------------------------------------------------------
+    # Unified objects endpoint (Stage 3, PR 2)
+    # -----------------------------------------------------------------
+    # Один endpoint /objects?domain=thanka,listing,...&limit&offset с
+    # унифицированным ответом. Под капотом — те же выборки из БД, но
+    # отображённые в общий формат SubjectObjectItem с дискриминатором.
+    # -----------------------------------------------------------------
+
+    # Все поддерживаемые домены (в порядке отображения по умолчанию).
+    SUPPORTED_DOMAINS = (
+        "thanka",
+        "listing",
+        "deal",
+        "decision",
+        "contribution",
+        "account",
+    )
+
+    @staticmethod
+    def _parse_domains(domain_param: Optional[str]) -> list[str]:
+        """Парсит query-параметр ?domain=thanka,listing.
+
+        - Пустая/None строка → все поддерживаемые домены.
+        - Неизвестные значения → 400 (явная ошибка лучше тихого пропуска).
+        - Дубликаты убираются с сохранением порядка.
+        """
+        if not domain_param:
+            return list(SubjectService.SUPPORTED_DOMAINS)
+
+        raw = [d.strip().lower() for d in domain_param.split(",") if d.strip()]
+        if not raw:
+            return list(SubjectService.SUPPORTED_DOMAINS)
+
+        seen: set[str] = set()
+        result: list[str] = []
+        for d in raw:
+            if d in seen:
+                continue
+            if d not in SubjectService.SUPPORTED_DOMAINS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"unknown domain '{d}'. Supported: {', '.join(SubjectService.SUPPORTED_DOMAINS)}",
+                )
+            seen.add(d)
+            result.append(d)
+        return result
+
+    async def list_objects(
+        self,
+        subject_id: str,
+        domain_param: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> SubjectObjectsResponse:
+        """Единая ручка cross-доменной выборки.
+
+        Стратегия:
+        1. Парсим список запрошенных доменов.
+        2. Для каждого домена считаем COUNT (для `totals`).
+        3. Тянем по каждому домену top-N последних объектов (N = limit) и
+           кладём в общий список, сортируем DESC по `sortKey`.
+        4. Применяем offset/limit к объединённому списку.
+
+        Такой подход даёт честный смешанный feed без N+1: при K доменах
+        получается K COUNT'ов + K SELECT'ов с лимитом limit, что приемлемо
+        для типичного limit=50 и 6 доменов. Если в будущем понадобится
+        строгая глобальная пагинация — заменим на UNION ALL с одним сортом.
+        """
+        await self._ensure_subject_exists(subject_id)
+        limit, offset = self._clamp_paging(limit, offset)
+        domains = self._parse_domains(domain_param)
+
+        totals: dict[str, int] = {}
+        all_items: list[SubjectObjectItem] = []
+
+        # --- thanka --------------------------------------------------
+        if "thanka" in domains:
+            cnt = await self._fetch_one(
+                """
+                SELECT COUNT(*) AS c
+                  FROM homonet.thanka t
+                  JOIN homonet.author a ON a.author_id = t.author_id
+                 WHERE a.subject_id = %s
+                """,
+                subject_id,
+            )
+            totals["thanka"] = int(cnt["c"])
+
+            rows = await self._fetch_all(
+                """
+                SELECT
+                    t.thanka_id::text   AS thanka_id,
+                    t.title             AS title,
+                    t.status::text      AS status,
+                    t.thanka_type_id::text AS thanka_type_id,
+                    t.author_id::text   AS author_id,
+                    t.created_at        AS created_at
+                FROM homonet.thanka t
+                JOIN homonet.author a ON a.author_id = t.author_id
+                WHERE a.subject_id = %s
+                ORDER BY t.created_at DESC NULLS LAST, t.thanka_id DESC
+                LIMIT %s
+                """,
+                subject_id,
+                limit,
+            )
+            for r in rows:
+                all_items.append(SubjectObjectItem(
+                    domain="thanka",
+                    objectId=r["thanka_id"],
+                    title=r["title"] or "",
+                    status=r["status"],
+                    sortKey=str(r["created_at"]) if r["created_at"] else None,
+                    payload={
+                        "thankaTypeId": r["thanka_type_id"],
+                        "authorId": r["author_id"],
+                        "createdAt": str(r["created_at"]) if r["created_at"] else None,
+                    },
+                ))
+
+        # --- listing -------------------------------------------------
+        if "listing" in domains:
+            cnt = await self._fetch_one(
+                "SELECT COUNT(*) AS c FROM homonet.listing WHERE seller_subject_id = %s",
+                subject_id,
+            )
+            totals["listing"] = int(cnt["c"])
+
+            rows = await self._fetch_all(
+                """
+                SELECT
+                    listing_id::text   AS listing_id,
+                    asset_id::text     AS asset_id,
+                    price              AS price,
+                    quantity           AS quantity,
+                    unit::text         AS unit,
+                    status::text       AS status,
+                    created_at         AS created_at
+                FROM homonet.listing
+                WHERE seller_subject_id = %s
+                ORDER BY created_at DESC NULLS LAST, listing_id DESC
+                LIMIT %s
+                """,
+                subject_id,
+                limit,
+            )
+            for r in rows:
+                all_items.append(SubjectObjectItem(
+                    domain="listing",
+                    objectId=r["listing_id"],
+                    title=f"Listing {r['asset_id']}",
+                    status=r["status"],
+                    sortKey=str(r["created_at"]) if r["created_at"] else None,
+                    payload={
+                        "assetId": r["asset_id"],
+                        "price": float(r["price"]) if r["price"] is not None else None,
+                        "quantity": float(r["quantity"]) if r["quantity"] is not None else None,
+                        "unit": r["unit"],
+                        "createdAt": str(r["created_at"]) if r["created_at"] else None,
+                    },
+                ))
+
+        # --- deal ----------------------------------------------------
+        if "deal" in domains:
+            cnt = await self._fetch_one(
+                """
+                SELECT COUNT(*) AS c
+                  FROM homonet.deal
+                 WHERE supplier_subject_id = %s OR buyer_subject_id = %s
+                """,
+                subject_id,
+                subject_id,
+            )
+            totals["deal"] = int(cnt["c"])
+
+            rows = await self._fetch_all(
+                """
+                SELECT
+                    deal_id::text                                          AS deal_id,
+                    listing_id::text                                       AS listing_id,
+                    CASE WHEN supplier_subject_id = %s THEN 'supplier'
+                         ELSE 'buyer' END                                  AS role,
+                    CASE WHEN supplier_subject_id = %s THEN buyer_subject_id::text
+                         ELSE supplier_subject_id::text END                AS counterparty_subject_id,
+                    quantity                                               AS quantity,
+                    price                                                  AS price,
+                    deal_sum                                               AS deal_sum,
+                    status::text                                           AS status,
+                    deal_date                                              AS deal_date
+                FROM homonet.deal
+                WHERE supplier_subject_id = %s OR buyer_subject_id = %s
+                ORDER BY deal_date DESC NULLS LAST, deal_id DESC
+                LIMIT %s
+                """,
+                subject_id,
+                subject_id,
+                subject_id,
+                subject_id,
+                limit,
+            )
+            for r in rows:
+                all_items.append(SubjectObjectItem(
+                    domain="deal",
+                    objectId=r["deal_id"],
+                    title=f"Deal ({r['role']})",
+                    status=r["status"],
+                    sortKey=str(r["deal_date"]) if r["deal_date"] else None,
+                    payload={
+                        "listingId": r["listing_id"],
+                        "role": r["role"],
+                        "counterpartySubjectId": r["counterparty_subject_id"],
+                        "quantity": float(r["quantity"]),
+                        "price": float(r["price"]),
+                        "dealSum": float(r["deal_sum"]) if r["deal_sum"] is not None else None,
+                        "dealDate": str(r["deal_date"]) if r["deal_date"] else None,
+                    },
+                ))
+
+        # --- decision ------------------------------------------------
+        if "decision" in domains:
+            cnt = await self._fetch_one(
+                "SELECT COUNT(*) AS c FROM homonet.decision WHERE proposed_by_subject_id = %s",
+                subject_id,
+            )
+            totals["decision"] = int(cnt["c"])
+
+            rows = await self._fetch_all(
+                """
+                SELECT
+                    decision_id::text  AS decision_id,
+                    community_id::text AS community_id,
+                    decision_type::text AS decision_type,
+                    title              AS title,
+                    status::text       AS status,
+                    proposed_at        AS proposed_at
+                FROM homonet.decision
+                WHERE proposed_by_subject_id = %s
+                ORDER BY proposed_at DESC NULLS LAST, decision_id DESC
+                LIMIT %s
+                """,
+                subject_id,
+                limit,
+            )
+            for r in rows:
+                all_items.append(SubjectObjectItem(
+                    domain="decision",
+                    objectId=r["decision_id"],
+                    title=r["title"] or "",
+                    status=r["status"],
+                    sortKey=str(r["proposed_at"]) if r["proposed_at"] else None,
+                    payload={
+                        "communityId": r["community_id"],
+                        "decisionType": r["decision_type"],
+                        "proposedAt": str(r["proposed_at"]) if r["proposed_at"] else None,
+                    },
+                ))
+
+        # --- contribution --------------------------------------------
+        if "contribution" in domains:
+            cnt = await self._fetch_one(
+                "SELECT COUNT(*) AS c FROM homonet.contribution WHERE contributor_subject_id = %s",
+                subject_id,
+            )
+            totals["contribution"] = int(cnt["c"])
+
+            rows = await self._fetch_all(
+                """
+                SELECT
+                    contribution_id::text   AS contribution_id,
+                    process_id::text        AS process_id,
+                    contribution_type::text AS contribution_type,
+                    description             AS description,
+                    recorded_at             AS recorded_at
+                FROM homonet.contribution
+                WHERE contributor_subject_id = %s
+                ORDER BY recorded_at DESC NULLS LAST, contribution_id DESC
+                LIMIT %s
+                """,
+                subject_id,
+                limit,
+            )
+            for r in rows:
+                all_items.append(SubjectObjectItem(
+                    domain="contribution",
+                    objectId=r["contribution_id"],
+                    title=(r["description"] or "")[:120] or r["contribution_type"],
+                    status=None,
+                    sortKey=str(r["recorded_at"]) if r["recorded_at"] else None,
+                    payload={
+                        "processId": r["process_id"],
+                        "contributionType": r["contribution_type"],
+                        "description": r["description"],
+                        "recordedAt": str(r["recorded_at"]) if r["recorded_at"] else None,
+                    },
+                ))
+
+        # --- account -------------------------------------------------
+        if "account" in domains:
+            cnt = await self._fetch_one(
+                "SELECT COUNT(*) AS c FROM homonet.account WHERE owner_subject_id = %s",
+                subject_id,
+            )
+            totals["account"] = int(cnt["c"])
+
+            rows = await self._fetch_all(
+                """
+                SELECT
+                    account_id::text   AS account_id,
+                    currency           AS currency,
+                    balance            AS balance,
+                    status::text       AS status,
+                    account_type       AS account_type
+                FROM homonet.account
+                WHERE owner_subject_id = %s
+                ORDER BY currency
+                LIMIT %s
+                """,
+                subject_id,
+                limit,
+            )
+            for r in rows:
+                all_items.append(SubjectObjectItem(
+                    domain="account",
+                    objectId=r["account_id"],
+                    title=f"{r['currency']} account",
+                    status=r["status"],
+                    sortKey=None,  # счета сортируем по currency, не по дате
+                    payload={
+                        "currency": r["currency"],
+                        "balance": float(r["balance"]),
+                        "accountType": r["account_type"],
+                    },
+                ))
+
+        # --- сортировка и пагинация смешанного списка ----------------
+        # Сначала items с sortKey (DESC по дате/времени в ISO-строке — верно
+        # сортируется лексикографически), затем items без sortKey (например account).
+        dated = sorted(
+            [it for it in all_items if it.sortKey],
+            key=lambda it: it.sortKey or "",
+            reverse=True,
+        )
+        undated = [it for it in all_items if not it.sortKey]
+        ordered = dated + undated
+
+        total = sum(totals.values())
+        page = ordered[offset : offset + limit]
+
+        return SubjectObjectsResponse(
+            subjectId=subject_id,
+            limit=limit,
+            offset=offset,
+            total=total,
+            totals=totals,
+            items=page,
         )

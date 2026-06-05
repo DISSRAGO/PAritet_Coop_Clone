@@ -343,7 +343,7 @@ class LocalCogiAdapter:
             "Style": "",
             "ChildrenImage": {},
             "DocImage": {},
-            "Request": {},
+            "Request": _default_request(),
             "TypeName": type_name,
             "Accusativus": accus,
             "Genitivus": genit,
@@ -392,7 +392,7 @@ class LocalCogiAdapter:
             "Style": "",
             "ChildrenImage": {},
             "DocImage": {},
-            "Request": {},
+            "Request": _default_request(),
             "TypeName": "Сайт",
             "Accusativus": "сайт",
             "Genitivus": "сайта",
@@ -1091,3 +1091,26 @@ def _reg(items: list) -> dict:
     Без оборачивания любой список превращается в [].
     """
     return {"RegisteredObject": items or []}
+
+
+def _default_request() -> dict:
+    """Дефолтный Request-объект по легаси-схеме setThanka-6.php (строки 46-57).
+
+    Фронт (CogRequest.jsx::RequestViewer) на старте делает
+    `request.Fields.split(",")`. Если бэк отдаст `Request: {}` или
+    отсутствие поля Fields — крашится весь рендер тханки типа `request`/Бот.
+    Поэтому возвращаем все поля с пустыми строками — ровно как PHP-легаси,
+    где `$_POST['Request_*']` всегда были строками (пустыми по умолчанию).
+    """
+    return {
+        "Fields": "",
+        "StartDate": "",
+        "EndDate": "",
+        "Picture": "",
+        "SortOrder": "",
+        "SortField": "",
+        "QueryName": "",
+        "Categories": "",
+        "SearchStrings": "",
+        "SpecialProps": "",
+    }

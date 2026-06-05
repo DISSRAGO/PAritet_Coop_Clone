@@ -148,6 +148,17 @@ class LocalCogiAdapter:
         avatar_list = self._avatar_list_for(login=login)
         author_id = avatar_list[0]["ID"] if avatar_list else ""
 
+        # Резолвим subject_id зрителя — это ключ для определения владельца,
+        # устойчивый к дублям author-рядов. Один ход в auth_user.
+        viewer_subject_id = ""
+        if login:
+            _vs = _q(
+                "SELECT subject_id::text AS sid FROM auth_user WHERE login = %s LIMIT 1",
+                (login,),
+            )
+            if _vs and _vs[0].get("sid"):
+                viewer_subject_id = _vs[0]["sid"]
+
         # thanka_id может приходить как UUID, так и custom_url (напр. WarhammerTheOldWorld).
         # Канон PHP: ?StartThanka=WarhammerTheOldWorld — это читаемый URL.
         # Сначала пробуем как UUID, потом ищем по cogobject.current_content->>'custom_url'.
@@ -157,6 +168,12 @@ class LocalCogiAdapter:
             # иначе cast сломается в PostgreSQL.
             import re as _re
             uuid_pattern = _re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+            # author_subject_id тянем JOIN'ом author → subject. Это источник
+            # правды для определения владельца: у одного subject может быть
+            # несколько author-рядов (legacy + созданный через subject-путь
+            # в PR #23). Сравнение по author_id в такой ситуации давало false
+            # для тханок созданных одним из author'ов, видимых через другой
+            # (avatar ведёт на legacy author, а тханка от subject-author).
             if uuid_pattern.match(thanka_id):
                 rows = _q(
                     """
@@ -164,8 +181,10 @@ class LocalCogiAdapter:
                            t.title           AS name,
                            t.status          AS status,
                            t.author_id::text AS author_id,
+                           a.subject_id::text AS author_subject_id,
                            COALESCE(co.current_content, '{}'::jsonb) AS content
                     FROM thanka t
+                    LEFT JOIN author a ON a.author_id = t.author_id
                     LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
                     WHERE t.thanka_id::text = %s
                     LIMIT 1
@@ -182,8 +201,10 @@ class LocalCogiAdapter:
                            t.title           AS name,
                            t.status          AS status,
                            t.author_id::text AS author_id,
+                           a.subject_id::text AS author_subject_id,
                            COALESCE(co.current_content, '{}'::jsonb) AS content
                     FROM thanka t
+                    LEFT JOIN author a ON a.author_id = t.author_id
                     LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
                     WHERE co.current_content->>'custom_url' = %s
                     LIMIT 1
@@ -251,12 +272,32 @@ class LocalCogiAdapter:
 
         # PrivacyLevel определяет access во фронте:
         #   >=3 — можно создавать тханки, 6 — владелец.
-        is_owner = bool(
+        #
+        # Определяем владельца через subject_id (стабильный ключ cross-фронт
+        # экосистемы), а не через author_id. Причина: в базе могут существовать
+        # несколько author-рядов для одного subject (legacy со времён
+        # _ensure_author_for + новый из _ensure_author_by_subject в PR #23
+        # для legacy-author'ов без subject_id). Следствие бага было: новые
+        # тханки ссылались на subject-author, avatar-путь резолвил зрителя
+        # в legacy-author, сравнение разных author_id давало is_owner=False,
+        # и кнопка "Редактировать" исчезала у владельца.
+        #
+        # Fallback на author_id оставлен для легаси-данных, где у author
+        # вообще нет subject_id (NULL) — иначе ни одна старая тханка
+        # не определялась бы как своя до запуска backfill-скрипта.
+        is_owner_by_subject = bool(
+            viewer_subject_id
+            and row
+            and row.get("author_subject_id")
+            and str(row["author_subject_id"]) == str(viewer_subject_id)
+        )
+        is_owner_by_author = bool(
             author_id
             and row
             and row.get("author_id")
             and str(row["author_id"]) == str(author_id)
-        ) or (is_cabinet or obj_type == "avatar")
+        )
+        is_owner = is_owner_by_subject or is_owner_by_author or (is_cabinet or obj_type == "avatar")
         privacy_level = 6 if is_owner else 1
 
         my_thanka_list: list[dict] = []
@@ -1152,6 +1193,35 @@ class LocalCogiAdapter:
         if not subj_rows:
             return ""
         display_name = subj_rows[0]["display_name"] or ""
+
+        # 2.5. Lazy-нормализация legacy author'ов.
+        #
+        # Перед созданием нового author ищем legacy author без subject_id
+        # для того же пользователя через цепочку subject → auth_user.login →
+        # avatar.login → avatar.author_id → author. Если находим — вписываем
+        # в него этот subject_id и возвращаем, вместо того чтобы плодить второй
+        # author-ряд на тот же subject. Без этого старые тханки оставались
+        # на legacy-author, новые шли на свежесозданный — и ломались
+        # права (баг PR #25-fix: исчезла кнопка "Редактировать"
+        # у новых тханок).
+        legacy_author = _q(
+            """
+            SELECT a.author_id::text AS aid
+            FROM author a
+            JOIN avatar av ON av.author_id = a.author_id
+            JOIN auth_user au ON au.login = av.login
+            WHERE au.subject_id::text = %s
+              AND a.subject_id IS NULL
+            LIMIT 1
+            """,
+            (subject_id,),
+        )
+        if legacy_author:
+            _q(
+                "UPDATE author SET subject_id = %s WHERE author_id::text = %s",
+                (subject_id, legacy_author[0]["aid"]),
+            )
+            return legacy_author[0]["aid"]
 
         # 3. Создаём author.
         new_author = _q(

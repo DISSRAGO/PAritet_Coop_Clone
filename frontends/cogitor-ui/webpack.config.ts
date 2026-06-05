@@ -1,14 +1,28 @@
 import path from "path";
 import HtmlWebpackPlugin from "html-webpack-plugin";
-import type { Configuration } from "webpack";
+import ReactRefreshWebpackPlugin from "@pmmmwh/react-refresh-webpack-plugin";
+import type { Configuration, WebpackPluginInstance } from "webpack";
 import type { Configuration as DevServerConfiguration } from "webpack-dev-server";
+
+// При запуске через `webpack serve` webpack-cli выставляет WEBPACK_SERVE=true.
+// Используем это как единственный надёжный признак dev-сервера: фронт-dev-server
+// крутится отдельно от основного start_cogiteka_hybrid.sh (на 3001), а production
+// build идёт командой `webpack --mode production` без serve.
+const isDevServer = process.env.WEBPACK_SERVE === "true";
 
 const devServer: DevServerConfiguration = {
   host: "0.0.0.0",
   port: 3001,
 
+  // hot:true + react-refresh-webpack-plugin = HMR с сохранением состояния React.
+  // Без плагина webpack делал полный reload страницы при любом изменении — теряли
+  // открытый редактор тханки, форму, прокрутку. Теперь правки в jsx подхватываются
+  // «на лету», состояние компонентов сохраняется.
   hot: true,
-  open: true,
+
+  // open:false — на сервере нет браузера, прежнее open:true спамило ошибками
+  // "xdg-open: not found" в логах. Локально девелопер откроет :3001 сам.
+  open: false,
 
   historyApiFallback: true,
 
@@ -129,11 +143,18 @@ const config: Configuration = {
     ],
   },
 
-  plugins: [
+  plugins: ([
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "public", "index.html"),
     }),
-  ],
+    // React Refresh работает только при включённом dev-server. В production
+    // build плагин подключать нельзя — он подмешивает HMR-рантайм в бандл.
+    isDevServer && new ReactRefreshWebpackPlugin({
+      // overlay уже даёт webpack-dev-server через client.overlay — отключаем,
+      // чтобы не было двух перекрывающихся оверлеев с ошибками.
+      overlay: false,
+    }),
+  ].filter(Boolean)) as WebpackPluginInstance[],
 
   devtool: "eval-source-map",
 

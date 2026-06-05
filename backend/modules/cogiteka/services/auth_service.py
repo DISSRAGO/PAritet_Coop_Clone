@@ -14,7 +14,18 @@ from backend.shared.schemas.auth import (
     create_refresh_token,
     decode_refresh_token,
 )
+from backend.shared.security import hash_password, verify_password
+
 PHONE_CLEAN_RE = re.compile(r"[^\d+]")
+
+# passlib pbkdf2_sha256 hashes always start with this prefix.
+# Anything else stored in password_hash is treated as a legacy plain password
+# and is transparently rehashed on next successful login.
+_HASH_PREFIX = "$pbkdf2-sha256$"
+
+
+def _is_hashed(value: str | None) -> bool:
+    return bool(value) and value.startswith(_HASH_PREFIX)
 
 
 def normalize_email(email: Optional[str]) -> Optional[str]:
@@ -123,7 +134,7 @@ class AuthService:
                         login,
                         email,
                         phone,
-                        dto.password,
+                        hash_password(dto.password),
                     ),
                 )
                 row = await cur.fetchone()
@@ -207,11 +218,34 @@ class AuthService:
                 detail="Registration is not confirmed",
             )
 
-        if row["password_hash"] != password:
+        stored = row["password_hash"] or ""
+        password_ok = False
+        needs_rehash = False
+
+        if _is_hashed(stored):
+            try:
+                password_ok = verify_password(password, stored)
+            except Exception:
+                password_ok = False
+        else:
+            # Legacy plain-text password support — accept once, then rehash.
+            password_ok = stored == password
+            needs_rehash = password_ok
+
+        if not password_ok:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
             )
+
+        if needs_rehash:
+            new_hash = hash_password(password)
+            async with get_conn() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(
+                        "UPDATE homonet.auth_user SET password_hash = %s, updated_at = now() WHERE user_id = %s",
+                        (new_hash, row["user_id"]),
+                    )
 
         access_token = create_access_token(
             {"user_id": str(row["user_id"]), "login": str(row["login"])}

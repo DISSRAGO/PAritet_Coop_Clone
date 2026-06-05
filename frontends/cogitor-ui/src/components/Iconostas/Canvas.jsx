@@ -464,45 +464,17 @@ function OneSectorBig(ctxS, sector, w, h, n) {
     ctxS.stroke();
 }
 
-function Header(ctxT, name, offsetX, offsetY) {
-    if (name == null) return;
-    const label = String(name);
-
-    ctxT.fillStyle = 'white'
-    ctxT.strokeWidth = 1;
-    ctxT.strokeStyle = 'black';
-    ctxT.font = "bold 16px arial";
-
-    // Раньше рамка всегда рисовалась справа-внизу от курсора
-    // (offsetX+5, offsetY-10). Если сектор правее середины/ниже середины
-    // canvas, подпись названия сектора обрезалась краем. Сейчас меряем
-    // размер лейбла и зеркалим коробку относительно курсора, если
-    // она не влезает в видимую часть canvas.
-    const padX = 5;
-    const padY = 10;
-    const boxH = 20;
-    const textW = ctxT.measureText(label).width;
-    const boxW = textW + padX;
-    const maxW = ctxT.canvas.width;
-    const maxH = ctxT.canvas.height;
-
-    let boxX = offsetX + 5;
-    let boxY = offsetY - padY;
-    // правый край: иначе рисуем слева от курсора
-    if (boxX + boxW > maxW) {
-        boxX = Math.max(0, offsetX - 5 - boxW);
+// Header() раньше рисовал подпись названия сектора прямо на canvas. Из-за этого
+// подпись обрезалась границами canvas и никогда не могла выйти
+// поверх соседних элементов. Теперь tooltip рендерится через DOM-оверлей
+// (position:fixed, z-index поверх всех фреймов) в самом компоненте Canvas,
+// а эта функция просто передаёт в setter'е текст и координаты.
+function showTooltip(setTooltip, name, clientX, clientY) {
+    if (name == null || name === '') {
+        setTooltip(t => t.visible ? { ...t, visible: false } : t);
+        return;
     }
-    // нижний край: иначе поднимаем выше
-    if (boxY + boxH > maxH) {
-        boxY = Math.max(0, maxH - boxH - 1);
-    }
-    // верхний край на всякий случай
-    if (boxY < 0) boxY = 0;
-
-    ctxT.fillRect(boxX, boxY, boxW, boxH)
-    ctxT.strokeRect(boxX, boxY, boxW, boxH)
-    ctxT.fillStyle = 'black'
-    ctxT.fillText(label, boxX + 2, boxY + 15)
+    setTooltip({ text: String(name), x: clientX, y: clientY, visible: true });
 }
 
 function Sectors(props) {
@@ -795,12 +767,20 @@ function Canvas(props) {
         circle: false,
     })
 
+    // DOM-overlay tooltip: рисуем поверх canvas через position:fixed + z-index,
+    // чтобы имя сектора не обрезалось границами canvas.
+    const [tooltip, setTooltip] = useState({ text: '', x: 0, y: 0, visible: false })
+
     function onMouseMove(e) {
         const ctx = bigRef.current.getContext('2d');
         const ctxT = titleRef.current.getContext('2d');
         ctx.strokeStyle = strokeColour;
         ctx.lineWidth = 3;
         ctxT.clearRect(0, 0, size.w + 100, size.h)
+
+        // По умолчанию прячем tooltip — включим его обратно только если
+        // фактически навелись на элемент с именем.
+        let nextLabel = null;
 
         if (mousePosition.sector === false) {
             ctx.clearRect(0, 0, size.w, size.h)
@@ -837,7 +817,7 @@ function Canvas(props) {
                     arr[i].Description,
                     arr[i].Image
                 );
-                Header(ctxT, arr[i].Name, offsetX, offsetY)
+                nextLabel = arr[i].Name;
             }
         }
 
@@ -884,7 +864,7 @@ function Canvas(props) {
                         setMouse({ circle: false, sector: false, center: true, elem: false })
                     }
                     if (sectorsArr.thankaArray[i][j].Id !== -1 && (access == true || (access != true && sectorsArr.thankaArray[i][j].Id != 0))) {
-                        Header(ctxT, sectorsArr.thankaArray[i][j].Name, offsetX, offsetY)
+                        nextLabel = sectorsArr.thankaArray[i][j].Name;
                     }
                     break;
                 }
@@ -894,9 +874,11 @@ function Canvas(props) {
         if (R < radius[0]) {
             setMouse({ circle: false, sector: false, center: true, elem: false })
             if (!isLite) {
-                Header(ctxT, 'вернуться назад', offsetX, offsetY)
+                nextLabel = 'вернуться назад';
             }
         }
+
+        showTooltip(setTooltip, nextLabel, e.clientX, e.clientY)
     }
 //?lite=true
     function onClick(e) {
@@ -981,6 +963,7 @@ function Canvas(props) {
         ctxT.clearRect(0, 0, size.w + 10, size.h)
         setMouse({ circle: false, sector: false, center: false, elem: false })
         setSector({ circle: false, sector: false })
+        setTooltip(t => t.visible ? { ...t, visible: false } : t)
     }
 
     return (
@@ -1041,6 +1024,20 @@ function Canvas(props) {
                 onPointerOut={props.onPointerOut}
                 onMouseOut={mouseOut}
             />
+            {tooltip.visible && tooltip.text && (
+                <div style={{
+                    position: 'fixed',
+                    left: tooltip.x + 12,
+                    top: tooltip.y + 12,
+                    background: 'white',
+                    border: '1px solid black',
+                    padding: '2px 6px',
+                    font: 'bold 14px arial',
+                    whiteSpace: 'nowrap',
+                    pointerEvents: 'none',
+                    zIndex: 9999,
+                }}>{tooltip.text}</div>
+            )}
         </div>
     );
 }

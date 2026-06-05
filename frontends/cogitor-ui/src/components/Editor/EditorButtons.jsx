@@ -1,15 +1,17 @@
 import React from "react";
-import { createBrowserHistory } from "history";
-
-// Отдельный экземпляр history нужен именно для кнопки «Отменить»: приложение
-// использует history@5, и переходы в SPA идут через этот объект.
-// Поход через window.history.back() не возвращает на предыдущий экран,
-// если переход был сделан через history.push() библиотеки history.
-const history = createBrowserHistory();
+import { backHistory } from "../../utils/HistoryManager.js";
 
 // Блок кнопок «Сохранить» / «Отменить». Поведение зависит от режима
-// (add / edit / create) и от выбранного типа тханки. Логика не
-// менялась — это механический вынос из EditorComponent.jsx.
+// (add / edit / create) и от выбранного типа тханки.
+//
+// Кнопка «Отменить» использует backHistory() из HistoryManager — это
+// собственный механизм проекта поверх sessionStorage, который
+// хранит реальную цепочку переходов по тханкам. Ровно этот же
+// helper вызывается кнопками «Вернуться» в EditorPage.jsx и в других
+// местах проекта.
+// (Ранее был history.back() из createBrowserHistory — он опирается
+// на браузерную историю, которая в SPA с react-router-dom не всегда
+// содержит нужный слой — поэтому клик визуально не реагировал.)
 function EditorButtons(props) {
     const {
         type,
@@ -43,7 +45,7 @@ function EditorButtons(props) {
                     )}
                 </>
             )}
-            <button type="button" onClick={(e) => history.back()}> Отменить </button>
+            <button type="button" onClick={(e) => backHistory()}> Отменить </button>
         </div>
     );
 }

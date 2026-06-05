@@ -65,12 +65,39 @@ def build_display_name(surname: str, first_name: str, second_name: Optional[str]
 class SubjectService:
     """Сервис subject-слоя (HomoNet V0.51).
 
-    Владеет таблицами: person, person_profile, subject.
+    Владеет таблицами: ``person``, ``person_profile``, ``subject``.
+
     Канонические проверки:
-      * subject имеет ровно один источник (person/organization/community);
-      * subject_kind соответствует заполненному FK;
-      * нельзя создать второй subject для того же person/community/organization
-        (на уровне БД — UNIQUE на FK, на уровне сервиса — pre-check + 409).
+
+    * subject имеет ровно один источник (person/organization/community);
+    * subject_kind соответствует заполненному FK;
+    * нельзя создать второй subject для того же person/community/organization
+      (на уровне БД — ``UNIQUE`` на FK, на уровне сервиса — pre-check + ``409``).
+
+    Публичные методы
+    -----------------
+
+    Запись:
+
+    * :meth:`create_personal_subject` — UC-03: создаёт personal subject для auth_user.
+    * :meth:`create_collective_subject` — UC-05: создаёт collective subject для community.
+
+    Чтение (Subject Resolver, Stage 3):
+
+    * :meth:`get_subject_card` — карточка subject (любой kind).
+    * :meth:`get_summary` — дашборд-счётчики по всем доменам одним роунд-трипом.
+    * :meth:`list_thankas` — тханки subject (через ``author.subject_id``).
+    * :meth:`list_listings` — listing'и, где subject выступает продавцом.
+    * :meth:`list_deals` — сделки, где subject — ``supplier``/``buyer`` (фильтр ``role``).
+    * :meth:`list_decisions` — решения, предложенные subject'ом.
+    * :meth:`list_contributions` — вклады subject'а в процессы.
+    * :meth:`list_accounts` — счета (``owner_subject_id``).
+    * :meth:`list_objects` — единая cross-доменная выборка (Stage 3 PR 2).
+
+    Все списочные методы возвращают ``PaginatedResponse`` (``items``,
+    ``total``, ``limit``, ``offset``) и валидируют существование subject
+    через :meth:`_ensure_subject_exists` (без этого фронт получал бы пустой
+    список на опечатку в UUID вместо 404).
     """
 
     # ---------- helpers --------------------------------------------------
@@ -302,6 +329,15 @@ class SubjectService:
     # ---------- get subject card -----------------------------------------
 
     async def get_subject_card(self, subject_id: str) -> SubjectCardResponse:
+        """Карточка subject для любого ``subject_kind``.
+
+        Собирает в одном запросе поля из ``homonet.subject`` + ``LEFT JOIN``ы
+        по связанным сущностям (``person``, ``community``,
+        ``organization``). Для персональных subject'ов подтягивает также
+        ``auth_user.login/email`` и ``person_profile`` (телефон/дата рождения).
+
+        404, если ``subject`` не найден.
+        """
         row = await self._fetch_one(
             """
             SELECT

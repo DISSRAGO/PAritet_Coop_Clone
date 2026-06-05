@@ -45,7 +45,13 @@ function EditorButtons(props) {
                     )}
                 </>
             )}
-            <button type="button" onClick={(e) => backHistory()}> Отменить </button>
+            <button type="button" onClick={(e) => {
+                console.log("CANCEL CLICK FIRED", {
+                    sessionHistory: sessionStorage.getItem("history"),
+                    location: window.location.pathname,
+                });
+                backHistory();
+            }}> Отменить </button>
         </div>
     );
 }

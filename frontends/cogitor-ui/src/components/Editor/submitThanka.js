@@ -80,7 +80,24 @@ export function submitThanka(ctx) {
     dataToEditor.UserId = auth.id;
     dataToEditor.UserLogin = auth.login;
 
-    dataToEditor.Thanka.CustomURL = selectedType == 'avatar' && customURL != "" ? '@' + customURL : customURL
+    // При редактировании (type='edit') не отправляем CustomURL, если
+    // пользователь его не трогал. Иначе бэк (_build_content) перезаписывает
+    // current_content.custom_url — и если исходный customURL по какой-то
+    // причине не дотянулся во фронт-state (пустой), адрес тханки
+    // обнуляется и она «теряет» человекочитаемый URL.
+    const defaultCustomURL = String(
+        (data && data.Thanka && data.Thanka.CustomURL) || (data && data.CustomURL) || ""
+    ).trim()
+    const desiredCustomURL = selectedType == 'avatar' && customURL != ""
+        ? '@' + customURL
+        : customURL
+    const normalize = (v) => String(v || "").trim().toLowerCase()
+    const customURLChanged = normalize(desiredCustomURL) !== normalize(defaultCustomURL)
+
+    if (type != 'edit' || customURLChanged) {
+        dataToEditor.Thanka.CustomURL = desiredCustomURL
+    }
+    // Иначе ключ не кладём — бэк оставит custom_url как был.
 
     dataToEditor.Id = (type == 'create' || type == 'add' ? '' : data.Id);
     if (buttonType == 'create') {
@@ -287,9 +304,15 @@ export function submitThanka(ctx) {
                     // CustomURL из ответа бэка (источник правды) — важно:
                     // это именно то, что реально сохранилось в БД, а не то, что
                     // пользователь вводил в форму.
+                    // Для edit fallback: если бэк не вернул CustomURL в ответе
+                    // (старая ветка _h_set_thanka возвращала только Id), берём
+                    // CustomURL из исходных данных тханки, которые мы редактируем —
+                    // он не менялся, раз пользователь не правил поле адреса.
                     const savedCustomURL = (
                         (result.data.Thanka && result.data.Thanka.CustomURL) ||
                         result.data.CustomURL ||
+                        (type == 'edit' && data && data.Thanka && data.Thanka.CustomURL) ||
+                        (type == 'edit' && data && data.CustomURL) ||
                         ""
                     ).toString().trim()
 

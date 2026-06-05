@@ -190,7 +190,11 @@ function EditorSite(props) {
     //стихии
     const [elemArr, setElemArr] = useState([]);
     const [selectedElements, setSelectedElements] = useState(elemArr);
-    const [customURL, setCustomURL] = useState(type == 'editsite' ? data.CustomURL : '')
+    const [customURL, setCustomURL] = useState(
+        type == 'editsite'
+            ? ((data.Thanka && data.Thanka.CustomURL) || data.CustomURL || '')
+            : ''
+    )
 
     //отправляем
     function FormSubmittionHandler(buttonType) {
@@ -353,7 +357,8 @@ function EditorSite(props) {
                     setCustomURL = {setCustomURL} 
                     checkedURL = {checkedURL} 
                     setCheckedURL = {setCheckedURL}
-                    defaultURL = {data.CustomURL}
+                    defaultURL = {(data.Thanka && data.Thanka.CustomURL) || data.CustomURL || ""}
+                    currentId = {data.Id || ""}
                 />
                 {<PrivacySettins
                     selectedPrivacy={selectedPrivacy} setSelectedPrivacy={setSelectedPrivacy}

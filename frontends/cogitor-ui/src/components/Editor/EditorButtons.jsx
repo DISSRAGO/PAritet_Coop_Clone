@@ -1,18 +1,22 @@
 import React from "react";
-import { backHistory } from "../../utils/HistoryManager.js";
+import { useNavigate } from "react-router-dom";
 
 // Блок кнопок «Сохранить» / «Отменить». Поведение зависит от режима
 // (add / edit / create) и от выбранного типа тханки.
 //
-// Кнопка «Отменить» использует backHistory() из HistoryManager — это
-// собственный механизм проекта поверх sessionStorage, который
-// хранит реальную цепочку переходов по тханкам. Ровно этот же
-// helper вызывается кнопками «Вернуться» в EditorPage.jsx и в других
-// местах проекта.
-// (Ранее был history.back() из createBrowserHistory — он опирается
-// на браузерную историю, которая в SPA с react-router-dom не всегда
-// содержит нужный слой — поэтому клик визуально не реагировал.)
+// Кнопка «Отменить» использует navigate(-1) из react-router-dom.
+// На страницу /create пользователь попадает через navigate("/create")
+// из Canvas — значит в истории router'а лежит родительская
+// тханка, и navigate(-1) корректно на неё вернёт.
+//
+// Оригинал использовал history.back() из отдельного createBrowserHistory()
+// — это совпадало с браузерной историей, потому что BrowserRouter в той
+// же истории и сохраняет записи при navigate(). Но формально
+// вызывать свой экземпляр history рядом с react-router-dom — хрупко
+// и в новых версиях библиотеки может не работать. navigate(-1) —
+// канонический способ в react-router-dom v6.
 function EditorButtons(props) {
+    const navigate = useNavigate();
     const {
         type,
         selectedType,
@@ -45,13 +49,7 @@ function EditorButtons(props) {
                     )}
                 </>
             )}
-            <button type="button" onClick={(e) => {
-                console.log("CANCEL CLICK FIRED", {
-                    sessionHistory: sessionStorage.getItem("history"),
-                    location: window.location.pathname,
-                });
-                backHistory();
-            }}> Отменить </button>
+            <button type="button" onClick={(e) => navigate(-1)}> Отменить </button>
         </div>
     );
 }

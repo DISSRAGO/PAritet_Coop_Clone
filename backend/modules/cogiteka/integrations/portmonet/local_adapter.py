@@ -548,7 +548,15 @@ class LocalCogiAdapter:
             (thanka_id, _json_dumps(content)),
         )
 
-        return {"Id": thanka_id}
+        # Отдаём фронту свежий CustomURL из базы — submitThanka.js использует
+        # его для redirect после сабмита. Без этого фронт падал в
+        # fallback /navigator/{uuid}, даже если в БД custom_url остался прежним.
+        custom_url = str(content.get("custom_url") or "").strip()
+        return {
+            "Id": thanka_id,
+            "CustomURL": custom_url,
+            "Thanka": {"Id": thanka_id, "CustomURL": custom_url},
+        }
 
     def _h_get_my_thanka(self, params: dict) -> dict:
         login = str(params.get("Login") or "")

@@ -80,7 +80,24 @@ export function submitThanka(ctx) {
     dataToEditor.UserId = auth.id;
     dataToEditor.UserLogin = auth.login;
 
-    dataToEditor.Thanka.CustomURL = selectedType == 'avatar' && customURL != "" ? '@' + customURL : customURL
+    // При редактировании (type='edit') не отправляем CustomURL, если
+    // пользователь его не трогал. Иначе бэк (_build_content) перезаписывает
+    // current_content.custom_url — и если исходный customURL по какой-то
+    // причине не дотянулся во фронт-state (пустой), адрес тханки
+    // обнуляется и она «теряет» человекочитаемый URL.
+    const defaultCustomURL = String(
+        (data && data.Thanka && data.Thanka.CustomURL) || (data && data.CustomURL) || ""
+    ).trim()
+    const desiredCustomURL = selectedType == 'avatar' && customURL != ""
+        ? '@' + customURL
+        : customURL
+    const normalize = (v) => String(v || "").trim().toLowerCase()
+    const customURLChanged = normalize(desiredCustomURL) !== normalize(defaultCustomURL)
+
+    if (type != 'edit' || customURLChanged) {
+        dataToEditor.Thanka.CustomURL = desiredCustomURL
+    }
+    // Иначе ключ не кладём — бэк оставит custom_url как был.
 
     dataToEditor.Id = (type == 'create' || type == 'add' ? '' : data.Id);
     if (buttonType == 'create') {

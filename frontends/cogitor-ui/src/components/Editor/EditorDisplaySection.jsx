@@ -35,7 +35,8 @@ function EditorDisplaySection(props) {
                 type={selectedType}
                 checkedURL={checkedURL}
                 setCheckedURL={setCheckedURL}
-                defaultURL={data.CustomURL}
+                defaultURL={(data.Thanka && data.Thanka.CustomURL) || data.CustomURL || ""}
+                currentId={data.Id || ""}
             />
             <PrivacySettins
                 selectedPrivacy={selectedPrivacy} setSelectedPrivacy={setSelectedPrivacy}

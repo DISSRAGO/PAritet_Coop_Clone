@@ -590,20 +590,46 @@ class LocalCogiAdapter:
         lookup = url.lstrip("@")
         if not lookup:
             return {"result": False, "Result": False}
+
+        # При редактировании тханка сама себе «занимает» свой custom_url —
+        # без этого жест «Проверить» на неизменном адресе всегда
+        # выдаёт «адрес занят». excludeId / ExcludeId / Id — UUID текущей
+        # тханки, её исключаем из проверки.
+        exclude_id = str(
+            params.get("excludeId")
+            or params.get("ExcludeId")
+            or params.get("Id")
+            or ""
+        ).strip()
+
         # custom_url хранится в cogobject.current_content (jsonb), а не в
         # колонке thanka — иначе бы SELECT падал 500-кой при каждой проверке
         # адреса в форме создания тханки. status фильтруем по таблице thanka.
-        rows = _q(
-            """
-            SELECT 1
-              FROM cogobject co
-              JOIN thanka t ON t.thanka_id = co.thanka_id
-             WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
-               AND t.status <> 'deleted'
-             LIMIT 1
-            """,
-            (lookup,),
-        )
+        if exclude_id:
+            rows = _q(
+                """
+                SELECT 1
+                  FROM cogobject co
+                  JOIN thanka t ON t.thanka_id = co.thanka_id
+                 WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
+                   AND t.status <> 'deleted'
+                   AND t.thanka_id::text <> %s
+                 LIMIT 1
+                """,
+                (lookup, exclude_id),
+            )
+        else:
+            rows = _q(
+                """
+                SELECT 1
+                  FROM cogobject co
+                  JOIN thanka t ON t.thanka_id = co.thanka_id
+                 WHERE LOWER(co.current_content->>'custom_url') = LOWER(%s)
+                   AND t.status <> 'deleted'
+                 LIMIT 1
+                """,
+                (lookup,),
+            )
         taken = bool(rows)
         return {"result": taken, "Result": taken}
 

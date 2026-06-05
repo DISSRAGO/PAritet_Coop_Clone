@@ -465,14 +465,44 @@ function OneSectorBig(ctxS, sector, w, h, n) {
 }
 
 function Header(ctxT, name, offsetX, offsetY) {
+    if (name == null) return;
+    const label = String(name);
+
     ctxT.fillStyle = 'white'
     ctxT.strokeWidth = 1;
     ctxT.strokeStyle = 'black';
     ctxT.font = "bold 16px arial";
-    ctxT.fillRect(offsetX + 5, offsetY - 10, ctxT.measureText(name).width + 5, 20)
-    ctxT.strokeRect(offsetX + 5, offsetY - 10, ctxT.measureText(name).width + 5, 20)
+
+    // Раньше рамка всегда рисовалась справа-внизу от курсора
+    // (offsetX+5, offsetY-10). Если сектор правее середины/ниже середины
+    // canvas, подпись названия сектора обрезалась краем. Сейчас меряем
+    // размер лейбла и зеркалим коробку относительно курсора, если
+    // она не влезает в видимую часть canvas.
+    const padX = 5;
+    const padY = 10;
+    const boxH = 20;
+    const textW = ctxT.measureText(label).width;
+    const boxW = textW + padX;
+    const maxW = ctxT.canvas.width;
+    const maxH = ctxT.canvas.height;
+
+    let boxX = offsetX + 5;
+    let boxY = offsetY - padY;
+    // правый край: иначе рисуем слева от курсора
+    if (boxX + boxW > maxW) {
+        boxX = Math.max(0, offsetX - 5 - boxW);
+    }
+    // нижний край: иначе поднимаем выше
+    if (boxY + boxH > maxH) {
+        boxY = Math.max(0, maxH - boxH - 1);
+    }
+    // верхний край на всякий случай
+    if (boxY < 0) boxY = 0;
+
+    ctxT.fillRect(boxX, boxY, boxW, boxH)
+    ctxT.strokeRect(boxX, boxY, boxW, boxH)
     ctxT.fillStyle = 'black'
-    ctxT.fillText(name, offsetX + 7, offsetY + 5)
+    ctxT.fillText(label, boxX + 2, boxY + 15)
 }
 
 function Sectors(props) {

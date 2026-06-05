@@ -522,7 +522,10 @@ function RequestInfo(props) {
 
     const {request} = props
 
-    let fields = request.Fields.split(",")
+    // Бэкенд для свежесозданной тханки типа "request"/"Бот" может вернуть
+    // Request без поля Fields (или с пустой строкой). Защищаемся, чтобы
+    // не упасть на split() и не сломать рендер всего viewer'а.
+    let fields = (request?.Fields || "").split(",").filter(Boolean)
     let translateFields = []
     fields.forEach((field) => translateFields.push(request_lang_switch(field)))
 
@@ -561,7 +564,9 @@ function RequestViewer(props) {
     //массив данных
     const [listContent, setListContent] = useState(content)
     //поля запроса
-    const [fields, setFields] = useState(request.Fields.split(","))
+    const [fields, setFields] = useState(
+        (request?.Fields || "").split(",").filter(Boolean)
+    )
     //список текстовых значений для фильтрации
     const [list, setList] = useState(useMemo(() => (/*request.QueryName != "products" ? */GetFilterField(content)/* : GetFilterCategoryField(content)*/),[]))
 

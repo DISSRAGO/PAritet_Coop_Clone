@@ -89,8 +89,8 @@ function CogObjectEditor(props) {
             birthDate, setBirthDate,
             telNumber, setTelNumber,
             email, setEmail,
-            descriptionRef,
-            avatarNameref
+            description, setDescription,
+            avatarName, setAvatarName
         } = props
 
     const LocationEvent = data.LocationEvent !== undefined && props.type == 'edit' ?
@@ -104,9 +104,8 @@ function CogObjectEditor(props) {
             <>
                 <p>Имя (как к вам обращаться): </p>
                 <input
-                    defaultValue={type == 'edit' ? data.Object.Name : ''}
-                    ref={avatarNameref}
-                    onChange={(e) => { avatarNameref.current = e.target.value; }}
+                    value={avatarName || ''}
+                    onChange={(e) => setAvatarName(e.target.value)}
                 />
                 <p>Дата рождения: </p>
                 <input type="date" defaultValue={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
@@ -121,9 +120,8 @@ function CogObjectEditor(props) {
             <>
                 <p>Содержание:</p>
                 <TextEditorJD
-                    refs={descriptionRef}
-                    onChange={(e) => {descriptionRef.current = e}}
-                    defaultValue={type == 'edit' ? data.Object.Description : ''}
+                    onChange={(e) => setDescription(e)}
+                    defaultValue={type == 'edit' ? (data.Object.Description || '') : ''}
                 />
                 <p>Автор:</p>
                 <input defaultValue={selectedRealAuthor} onChange={(e) => setSelectedRealAuthor(e.target.value)}/>

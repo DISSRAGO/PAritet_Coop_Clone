@@ -79,6 +79,11 @@ export function submitThanka(ctx) {
     dataToEditor.EditorType = type;
     dataToEditor.UserId = auth.id;
     dataToEditor.UserLogin = auth.login;
+    // Stage 3 PR 4: subject_id — канонический ключ владельца по всей экосистеме
+    // (subject — сущность выше когитеки; когитека — лишь один из фронтов).
+    // Бэк-адаптер выбирает SubjectId приоритетно над UserLogin; если personal subject
+    // ещё не создан (пустая строка), работает легаси-ветка по login.
+    dataToEditor.SubjectId = auth.subjectId || "";
 
     // При редактировании (type='edit') не отправляем CustomURL, если
     // пользователь его не трогал. Иначе бэк (_build_content) перезаписывает

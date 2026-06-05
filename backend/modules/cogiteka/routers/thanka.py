@@ -243,16 +243,25 @@ def resolve_root_target_by_host(host: str) -> dict[str, str]:
     return host_map.get(host, {"Id": str(START_THANKA_ID), "SiteId": ""})
 
 def _resolve_user_cabinet(ad, user: dict) -> str:
-    """Возвращает thanka_id кабинета авторизованного пользователя (с кэшом)."""
+    """Возвращает thanka_id кабинета авторизованного пользователя (с кэшом).
+
+    Stage 3 PR 4: в ключе кэша и в SOAP-params приоритетно используется subject_id
+    (канон). Если фронт его не прислал — fallback на login (легаси).
+    """
     login = user.get("login") or ""
-    if not login:
+    subject_id = str(user.get("subject_id") or "").strip()
+    if not login and not subject_id:
         return ""
-    key = f"{login}_profile"
+    key = f"subj:{subject_id}_profile" if subject_id else f"{login}_profile"
     if cache.exists(key):
         return cache.get(key) or ""
     res = ad.execute(
         "GetCabinetByUser",
-        {"UserId": user.get("id"), "Login": login},
+        {
+            "UserId": user.get("id"),
+            "Login": login,
+            "SubjectId": subject_id,
+        },
     )
     if res.Error:
         return ""
@@ -652,10 +661,13 @@ async def get_thanka_endpoint(request: Request):
         )
 
     method = "GetSitePage" if site_id else "GetThanka"
+    # Stage 3 PR 4: прокидываем SubjectId, если фронт его прислал. Адаптер
+    # использует его приоритетно над Login — канон V0.51.
     params = {
         "Id": thanka_id,
         "UserId": user.get("id", ""),
         "Login": user.get("login", ""),
+        "SubjectId": user.get("subject_id", ""),
         "SiteId": site_id,
     }
 

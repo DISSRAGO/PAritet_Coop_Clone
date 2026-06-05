@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, Query
 
+from backend.shared.db import get_conn
 from backend.shared.schemas.auth import (
     JWT_ALGORITHM,
     JWT_SECRET,
@@ -26,7 +27,36 @@ def _decode_bearer(authorization: str | None) -> dict:
     return payload
 
 
-def _header_info_payload(authorization: str | None) -> dict:
+async def _resolve_subject_id(user_id: str | int | None) -> str:
+    """Stage 3 PR 4: резолвит subject_id для auth_user.user_id.
+
+    Канон V0.51: auth_user.subject_id — каноническая связь. Фронт получает
+    его в /user/header_info и пробрасывает в SOAP-payload как SubjectId,
+    что выше login'а в приоритете (login — лишь один из входов).
+
+    Если auth_user.subject_id IS NULL (например, ещё не создан personal
+    subject) — возвращает пустую строку, фронт продолжит работать на login.
+    """
+    if not user_id:
+        return ""
+    try:
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT subject_id::text AS sid FROM homonet.auth_user WHERE user_id::text = %s",
+                    (str(user_id),),
+                )
+                row = await cur.fetchone()
+                if row and row["sid"]:
+                    return row["sid"]
+    except Exception:
+        # Не валим header_info, если subject_id вдруг не резолвится — это
+        # опциональное поле, фронт на это рассчитан (fallback на login).
+        return ""
+    return ""
+
+
+async def _header_info_payload(authorization: str | None) -> dict:
     payload = _decode_bearer(authorization)
     user_id = payload.get("user_id")
     login = payload.get("login") or ""
@@ -36,6 +66,7 @@ def _header_info_payload(authorization: str | None) -> dict:
         id_value: int | str | None = int(user_id) if user_id and str(user_id).isdigit() else user_id
     except Exception:
         id_value = user_id
+    subject_id = await _resolve_subject_id(user_id)
     return {
         "id": id_value,
         "login": login,
@@ -46,17 +77,20 @@ def _header_info_payload(authorization: str | None) -> dict:
         "surname": "",
         "bonusCount": 0,
         "notificationCount": 0,
+        # Stage 3 PR 4: subject_id (UUID или пустая строка) — фронт пробрасывает
+        # в SOAP-запросы как SubjectId, который имеет приоритет над Login.
+        "subjectId": subject_id,
     }
 
 
 @router.get("/headerinfo")
 async def headerinfo(authorization: str | None = Header(default=None)):
-    return _header_info_payload(authorization)
+    return await _header_info_payload(authorization)
 
 
 @router.get("/header_info")
 async def header_info(authorization: str | None = Header(default=None)):
-    return _header_info_payload(authorization)
+    return await _header_info_payload(authorization)
 
 
 # --- профиль (заглушка V0.51, поверх auth_user) -------------------------------

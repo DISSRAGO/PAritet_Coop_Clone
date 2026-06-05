@@ -202,6 +202,9 @@ function EditorSite(props) {
         dataToEditor.EditorType = type == 'editsite' ? 'edit' : type;
         dataToEditor.UserId = auth.id;
         dataToEditor.UserLogin = auth.login;
+        // Stage 3 PR 4: subject_id — канонический ключ владельца (выше login).
+        // Бэк-адаптер выбирает SubjectId приоритетно над UserLogin.
+        dataToEditor.SubjectId = auth.subjectId || "";
 
         dataToEditor.Thanka.CustomURL = customURL
 

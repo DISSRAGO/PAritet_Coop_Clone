@@ -4,6 +4,9 @@ export default class ThankaSevice {
 		let data = JSON.stringify({
 				id: auth.id,
 				login: auth.login,
+				// Stage 3 PR 4: subject_id — канонический ключ владельца.
+				// Бэк get_thanka_endpoint пробрасывает его в SOAP-params (приоритет над login).
+				subject_id: auth.subjectId || "",
 				address: address
 			})
 		return fetch(PATH + "thanka/getThanka.php", {

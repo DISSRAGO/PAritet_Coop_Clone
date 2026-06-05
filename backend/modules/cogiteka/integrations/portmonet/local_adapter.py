@@ -406,10 +406,15 @@ class LocalCogiAdapter:
         UC-create-thanka: создаём минимальную тханку для текущего пользователя.
         Источник данных: data['Thanka'], data['Object'].
         Сохраняем CustomURL/annotation/privacy в cogobject.current_content.
+
+        Stage 3 PR 4: если фронт прислал SubjectId — предпочитаем его
+        login'у: subject_id является каноническим владельцом (выше любого
+        фронта), login — это лишь один из входов (auth_user.login).
         """
         thanka = params.get("Thanka") or {}
         obj = params.get("Object") or {}
         user_login = str(params.get("UserLogin") or params.get("Login") or "")
+        subject_id_param = str(params.get("SubjectId") or "").strip()
 
         # CustomURL используем как fallback только в крайнем случае (кабинетные
         # тханки и прочие служебные, где Name осознанно равен ''),
@@ -449,15 +454,23 @@ class LocalCogiAdapter:
             if not exists:
                 parent_id = ""
 
-        # Найдём author_id для пользователя (login = avatar.login)
-        author_id = self._ensure_author_for(login=user_login)
+        # Найдём author_id для пользователя.
+        # Приоритет — SubjectId (канон V0.51); fallback на login для совместимости с
+        # фронтами, которые ещё не перевелись на subject_id.
+        if subject_id_param:
+            author_id = self._ensure_author_by_subject(subject_id=subject_id_param)
+        else:
+            author_id = self._ensure_author_for(login=user_login)
 
         # Канон KOGI.Metody / PERVYI-RELIZ: «Первые тханки — потомки аватара».
         # Если ParentId не был задан — корневая тханка становится
         # потомком кабинета пользователя. Сам кабинет исключён из выравнивания
         # (он и есть корень).
         if not parent_id and not (isinstance(thanka, dict) and thanka.get("IsCabinet")):
-            cabinet_id = self._cabinet_id_for(login=user_login)
+            if subject_id_param:
+                cabinet_id = self._cabinet_id_by_subject(subject_id=subject_id_param)
+            else:
+                cabinet_id = self._cabinet_id_for(login=user_login)
             if cabinet_id:
                 parent_id = cabinet_id
 
@@ -646,12 +659,22 @@ class LocalCogiAdapter:
         Возвращает Id «кабинетной» тханки пользователя. Если её ещё нет —
         создаёт. Эта тханка отображается как страница /profile с типом
         Object.Type='avatar' и подгружает MyThankaList.
+
+        Stage 3 PR 4: SubjectId имеет приоритет над login. Для login (создания
+        нового кабинета) — всё равно нужен отображаемый title, поэтому при
+        SubjectId-ветке берём display_name из subject (или строку 'cabinet' как
+        последний fallback).
         """
         login = str(params.get("Login") or "")
-        if not login:
+        subject_id_param = str(params.get("SubjectId") or "").strip()
+
+        if not login and not subject_id_param:
             return {"Id": ""}
 
-        author_id = self._ensure_author_for(login=login)
+        if subject_id_param:
+            author_id = self._ensure_author_by_subject(subject_id=subject_id_param)
+        else:
+            author_id = self._ensure_author_for(login=login)
         if not author_id:
             return {"Id": ""}
 
@@ -671,19 +694,27 @@ class LocalCogiAdapter:
             return {"Id": rows[0]["id"]}
 
         # создаём кабинет-тханку
+        # title: login (легаси) либо display_name subject'а при SubjectId-ветке.
+        cabinet_title = login
+        if not cabinet_title and subject_id_param:
+            sub_rows = _q(
+                "SELECT display_name FROM homonet.subject WHERE subject_id::text = %s",
+                (subject_id_param,),
+            )
+            cabinet_title = (sub_rows[0]["display_name"] if sub_rows else "") or "cabinet"
         ins = _q(
             """
             INSERT INTO thanka (title, author_id, status)
             VALUES (%s, %s, 'active')
             RETURNING thanka_id::text AS id
             """,
-            (login, author_id),
+            (cabinet_title, author_id),
         )
         if not ins:
             return {"Id": ""}
         cab_id = ins[0]["id"]
         cab_content = {
-            "title": login,
+            "title": cabinet_title,
             "description": "",
             "type": "avatar",
             "is_cabinet": True,
@@ -868,6 +899,30 @@ class LocalCogiAdapter:
             LIMIT 1
             """,
             (login,),
+        )
+        return rows[0]["id"] if rows else ""
+
+    def _cabinet_id_by_subject(self, subject_id: str) -> str:
+        """thanka_id кабинета по subject_id (Stage 3 PR 4).
+
+        Канон V0.51: кабинет — это тханка author'а, который привязан к
+        subject_id. Аватары/login из цепи выпадают — это важно для будущих
+        фронтов, у которых login может отсутствовать (например collective subject).
+        """
+        if not subject_id:
+            return ""
+        rows = _q(
+            """
+            SELECT t.thanka_id::text AS id
+            FROM thanka t
+            JOIN author a ON a.author_id = t.author_id
+            JOIN cogobject co ON co.thanka_id = t.thanka_id
+            WHERE a.subject_id::text = %s
+              AND (co.current_content->>'is_cabinet')::boolean IS TRUE
+            ORDER BY t.created_at
+            LIMIT 1
+            """,
+            (subject_id,),
         )
         return rows[0]["id"] if rows else ""
 
@@ -1062,6 +1117,71 @@ class LocalCogiAdapter:
             """,
             (author_id, login),
         )
+        return author_id
+
+    def _ensure_author_by_subject(self, subject_id: str) -> str:
+        """Обратный путь к _ensure_author_for: идём от subject_id (Stage 3 PR 4).
+
+        Канон V0.51: subject → author. Никакого login/avatar в обязательной
+        цепи нет — это важно для collective/organizational subject'ов, у которых
+        нет auth_user (и соответственно нет логина).
+
+        Идемпотентность: если author для subject уже есть — возвращает его id;
+        иначе создаёт с display_name = subject.display_name.
+
+        Для обратной совместимости с легаси-кодом, который ждёт и avatar (фронты
+        с login в профиле), дополнительно вписываем avatar по auth_user.login
+        если таковой найдётся.
+        """
+        if not subject_id:
+            return ""
+
+        # 1. Самый быстрый путь: author для этого subject уже существует.
+        rows = _q(
+            "SELECT author_id::text AS aid FROM author WHERE subject_id::text = %s LIMIT 1",
+            (subject_id,),
+        )
+        if rows:
+            return rows[0]["aid"]
+
+        # 2. Проверяем что subject существует (иначе INSERT в author сломает FK).
+        subj_rows = _q(
+            "SELECT display_name FROM homonet.subject WHERE subject_id::text = %s",
+            (subject_id,),
+        )
+        if not subj_rows:
+            return ""
+        display_name = subj_rows[0]["display_name"] or ""
+
+        # 3. Создаём author.
+        new_author = _q(
+            """
+            INSERT INTO author (subject_id, display_name)
+            VALUES (%s, %s)
+            RETURNING author_id::text AS aid
+            """,
+            (subject_id, display_name),
+        )
+        if not new_author:
+            return ""
+        author_id = new_author[0]["aid"]
+
+        # 4. Опционально: если у subject'а есть связанный auth_user — пропишем
+        # avatar.login (легаси-узел: фронты с login всё ещё ищут через avatar).
+        au_rows = _q(
+            "SELECT login FROM auth_user WHERE subject_id::text = %s",
+            (subject_id,),
+        )
+        if au_rows and au_rows[0]["login"]:
+            _q(
+                """
+                INSERT INTO avatar (author_id, login, status)
+                VALUES (%s, %s, 'active')
+                ON CONFLICT (login) DO NOTHING
+                """,
+                (author_id, au_rows[0]["login"]),
+            )
+
         return author_id
 
 

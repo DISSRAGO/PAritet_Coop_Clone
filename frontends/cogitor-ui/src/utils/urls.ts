@@ -16,9 +16,21 @@
 // с внешнего домена: браузер пытался достучаться до своего
 // собственного localhost:8000 → Failed to fetch.
 //
-// Через env REACT_APP_API_BASE_URL можно переопределить (например
-// для случаев, когда backend уже на отдельном домене).
-export const BASE_URL = (process.env as any).REACT_APP_API_BASE_URL ?? "";
+// Через env REACT_APP_API_BASE_URL можно переопределить (прокидывается
+// в бандл через webpack.DefinePlugin в webpack.config.ts).
+//
+// Безопасное чтение: в браузере нет глобального process, и если вдруг
+// DefinePlugin отключили — обращение к process.env.* бросит ReferenceError
+// прямо на импорте и вырубит весь бандл. Используем try/catch.
+function _readEnv(name: string): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (process as any)?.env?.[name] ?? "";
+  } catch {
+    return "";
+  }
+}
+export const BASE_URL = _readEnv("REACT_APP_API_BASE_URL");
 
 export const Urls = {
   // --- auth ---

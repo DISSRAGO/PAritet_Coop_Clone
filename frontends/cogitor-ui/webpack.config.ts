@@ -51,7 +51,15 @@ const devServer: DevServerConfiguration = {
   // иногда промахивается с протоколом при port-forwarding.
   webSocketServer: "ws",
 
-  client: {
+  // Отключение HMR-клиента в браузере через переменную WDS_DISABLE_CLIENT=1.
+  // Когда фронт проксируется через внешний reverse-proxy, который не
+  // настроен пропускать WebSocket Upgrade (например dev.clone.paritet.club),
+  // клиент в браузере бесконечно пишет "WebSocket connection ... failed"
+  // и "Trying to reconnect" — засоряет консоль и мешает отладке.
+  // С client:false фронт работает как статика (HMR нет — F5 руками),
+  // но консоль чистая. Домашний режим (прямой :3001 или SSH-туннель)
+  // — без переменной, HMR работает как раньше.
+  client: process.env.WDS_DISABLE_CLIENT === "1" ? false : {
     overlay: {
       errors: true,
       warnings: false,

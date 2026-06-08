@@ -26,6 +26,25 @@ const devServer: DevServerConfiguration = {
 
   historyApiFallback: true,
 
+  // allowedHosts — белый список Host-хедеров, которые принимает dev-сервер.
+  // Дефолт webpack-dev-server v4+ — "auto", пускает только localhost
+  // и хост, указанный в host. При проксировании через внешний
+  // reverse-proxy (например dev.clone.paritet.club → :3001) браузер
+  // отправляет Host: dev.clone.paritet.club, который не в whitelist’е,
+  // и dev-server отвечает 403 "Invalid Host header". Разрешаем всё
+  // что подпадает под *.paritet.club + localhost для прямого
+  // доступа и SSH-туннеля. Доп. домены можно добавлять
+  // через env-переменную WDS_ALLOWED_HOSTS (запятые).
+  allowedHosts: [
+    "localhost",
+    "127.0.0.1",
+    ".paritet.club",  // ведущая точка = все сабдомены
+    ...((process.env.WDS_ALLOWED_HOSTS || "")
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean)),
+  ],
+
   // Явно фиксируем тип WS-сервера. webpack-dev-server по умолчанию
   // и так использует ws, но без явного указания клиент в браузере
   // иногда промахивается с протоколом при port-forwarding.
@@ -46,11 +65,16 @@ const devServer: DevServerConfiguration = {
     // и hot reload перестаёт работать до перезагрузки страницы.
     // hostname:0.0.0.0 + port:0 заставляет клиент использовать
     // именно тот origin, через который страница была загружена —
-    // то есть localhost:3001 в браузере девелопера.
+    // то есть localhost:3001 в браузере девелопера или dev.clone.paritet.club
+    // в браузере директора.
+    //
+    // protocol НЕ фиксируем явно: клиент выберет ws/wss автоматически
+    // из location.protocol — http://→ws, https://→wss. Раньше был жёстко
+    // забит "ws", это ломало HMR при доступе через HTTPS-домен:
+    // браузер блокирует незашифрованный ws:// со страницы https://.
     webSocketURL: {
       hostname: "0.0.0.0",
       port: 0,
-      protocol: "ws",
       pathname: "/ws",
     },
 

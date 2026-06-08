@@ -13,7 +13,11 @@ export type OperationHistoryOptions = {
 
 export const userApi = createApi({
 	reducerPath: "userApi",
-	baseQuery: fetchBaseQuery({baseUrl: `http://localhost:3000/api/user`}),
+	// same-origin: все запросы /api/user/* уходят на тот же origin что и страница
+	// (dev: webpack proxy → :8000; prod: reverse-proxy → :3001 → webpack proxy → :8000).
+	// Раньше было http://localhost:3000/api/user — это вообще неправильный порт
+	// (ни dev :3001, ни backend :8000) — эти запросы никуда не ходили.
+	baseQuery: fetchBaseQuery({baseUrl: `/api/user`}),
 	endpoints: (build) => {
 		return ({
 			getProfile: build.query<IUserProfile, void>({

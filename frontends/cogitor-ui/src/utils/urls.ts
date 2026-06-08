@@ -1,4 +1,24 @@
-export const BASE_URL = "http://127.0.0.1:8000";
+// BASE_URL пустая = same-origin (все запросы пойдут на тот же хост/
+// порт/схему что и страница). Это правильный вариант и для dev,
+// и для prod:
+//
+//   • dev (localhost:3001 или SSH-туннель): /api/* уходит на :3001,
+//     там webpack-dev-server proxy (см. webpack.config.ts → devServer.proxy)
+//     пересылает на backend :8000.
+//
+//   • prod-домен (https://dev.clone.paritet.club): /api/* уходит на
+//     reverse-proxy админа → :3001 → webpack proxy → backend :8000.
+//     Позже, когда мы переедем на нормальный prod-деплой
+//     (сборка статики + nginx прямо на backend), эта логика не изменится —
+//     same-origin работает везде.
+//
+// Раньше было "http://127.0.0.1:8000" — это ломало всё при доступе
+// с внешнего домена: браузер пытался достучаться до своего
+// собственного localhost:8000 → Failed to fetch.
+//
+// Через env REACT_APP_API_BASE_URL можно переопределить (например
+// для случаев, когда backend уже на отдельном домене).
+export const BASE_URL = (process.env as any).REACT_APP_API_BASE_URL ?? "";
 
 export const Urls = {
   // --- auth ---

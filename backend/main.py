@@ -27,13 +27,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="HomoNet API - Shared Server", lifespan=lifespan)
 
+# CORS: для same-origin деплоя (https://dev.clone.paritet.club) запросы
+# идут с того же origin, что и фронт, поэтому CORS-заголовки фактически
+# не нужны. Оставляем список для случаев прямого обращения к :8000
+# (локальная разработка, отладка) и добавляем prod-домен явно.
+_CORS_ORIGINS_ENV = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+_CORS_ORIGINS = [
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://172.27.64.22:3001",
+    "https://dev.clone.paritet.club",
+]
+if _CORS_ORIGINS_ENV:
+    _CORS_ORIGINS.extend(
+        origin.strip() for origin in _CORS_ORIGINS_ENV.split(",") if origin.strip()
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-        "http://172.27.64.22:3001",
-    ],
+    allow_origins=_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

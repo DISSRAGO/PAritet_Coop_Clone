@@ -50,16 +50,25 @@ class SignUpRequest(BaseModel):
 
 
 class ConfirmRequest(BaseModel):
+    # Минимально-обязательные поля для текущей заглушечной логики.
+    # Реальная активация по коду пока не реализована (Stage 3), поэтому
+    # ActivationCode принимаем как строку, но в БД не записываем.
     Login: str
-    Password: str
-    Surname: str
-    FirstName: str
-    SecondName: Optional[str] = ""
-    Phone: str
-    Email: str
-    address: str
-    ActivationRequestId: str
     ActivationCode: str
+
+    # Унаследованные поля контракта SOAP-времён.
+    # Оставлены опциональными, чтобы фронт мог передавать их по желанию
+    # и не валиться по 422, если их нет.
+    Password: Optional[str] = ""
+    Surname: Optional[str] = ""
+    FirstName: Optional[str] = ""
+    SecondName: Optional[str] = ""
+    Phone: Optional[str] = ""
+    Email: Optional[str] = ""
+    address: Optional[str] = ""
+    ActivationRequestId: Optional[str] = ""
+
+    model_config = {"extra": "ignore"}
 
 
 def _make_token(payload: dict, ttl_seconds: int, token_type: str) -> str:

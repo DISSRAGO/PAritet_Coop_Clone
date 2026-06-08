@@ -1,6 +1,7 @@
 import path from "path";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import ReactRefreshWebpackPlugin from "@pmmmwh/react-refresh-webpack-plugin";
+import webpack from "webpack";
 import type { Configuration, WebpackPluginInstance } from "webpack";
 import type { Configuration as DevServerConfiguration } from "webpack-dev-server";
 
@@ -218,6 +219,20 @@ const config: Configuration = {
   plugins: ([
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "public", "index.html"),
+    }),
+    // Webpack 5 не полифилит process в браузере. Если в клиентском коде
+    // (utils/urls.ts) встречается process.env.REACT_APP_*, без DefinePlugin
+    // получаем ReferenceError: process is not defined прямо на первом
+    // импорте → белый экран. Прокидываем явный список REACT_APP_* (CRA-style)
+    // плюс NODE_ENV — этого хватает для оверрайдов BASE_URL и подобного,
+    // без утечки случайных переменных среды в бандл.
+    new webpack.DefinePlugin({
+      "process.env.NODE_ENV": JSON.stringify(
+        process.env.NODE_ENV || (isDevServer ? "development" : "production"),
+      ),
+      "process.env.REACT_APP_API_BASE_URL": JSON.stringify(
+        process.env.REACT_APP_API_BASE_URL || "",
+      ),
     }),
     // React Refresh работает только при включённом dev-server. В production
     // build плагин подключать нельзя — он подмешивает HMR-рантайм в бандл.

@@ -40,9 +40,15 @@ export const Urls = {
   LOGOUT_URL: `${BASE_URL}/api/auth/logout`,
   REFRESH_URL: `${BASE_URL}/api/auth/refresh`,
 
-  VALIDATE_LOGIN_URL: `${BASE_URL}/api/auth/validateLogin`,
-  VALIDATE_EMAIL_URL: `${BASE_URL}/api/auth/validateEmail`,
-  VALIDATE_PHONE_URL: `${BASE_URL}/api/auth/validatePhone`,
+  // На бэке маршруты реализованы в REST-стиле с подресурсом
+  // (POST /api/auth/validate/{login|email|phone}) — см.
+  // backend/modules/cogiteka/routers/auth.py. Раньше фронт
+  // использовал camelCase без слеша ("/validateLogin") — получал
+  // 404 на каждом открытии /signup и показывал 3 красных
+  // тоста "Not Found" поверх формы.
+  VALIDATE_LOGIN_URL: `${BASE_URL}/api/auth/validate/login`,
+  VALIDATE_EMAIL_URL: `${BASE_URL}/api/auth/validate/email`,
+  VALIDATE_PHONE_URL: `${BASE_URL}/api/auth/validate/phone`,
 
   // --- user / profile ---
   GET_PROFILE_URL: `${BASE_URL}/api/user/profile`,

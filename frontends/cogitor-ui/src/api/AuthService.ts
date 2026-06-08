@@ -34,11 +34,48 @@ export interface RefreshPayload {
   refreshToken: string;
 }
 
+function formatValidationDetail(detail: unknown): string | null {
+  // FastAPI/Pydantic возвращает 422 как { detail: [{ loc, msg, type }, ...] }.
+  // Преобразуем массив объектов в человекочитаемую строку.
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item: any) => {
+        if (item && typeof item === "object") {
+          const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+          const msg = item.msg || item.message || "";
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return typeof item === "string" ? item : "";
+      })
+      .filter(Boolean);
+    return parts.length ? parts.join("; ") : null;
+  }
+
+  if (typeof detail === "string") {
+    return detail;
+  }
+
+  if (detail && typeof detail === "object") {
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 async function handleJsonResponse(response: Response) {
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({} as any));
 
   if (!response.ok) {
-    throw new Error(data?.detail || data?.message || `HTTP ${response.status}`);
+    const message =
+      formatValidationDetail(data?.detail) ||
+      data?.message ||
+      data?.text ||
+      `HTTP ${response.status}`;
+    throw new Error(message);
   }
 
   return data;

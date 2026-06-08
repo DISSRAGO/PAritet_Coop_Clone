@@ -23,8 +23,25 @@ const ConfirmSignUp: FC = () => {
 		}
 	}, [confirmRequestStatus]);
 	const onFinish = (values: any) => {
-		const confirmFormData = signUpRequestStatus.data;
-		confirmFormData.ActivationCode = values.activationCode;
+		// signUpRequestStatus.data — это ответ /api/auth/signUp:
+		// { message, userId, login, email, phone }.
+		// Бэк-схема ConfirmRequest ждёт поля в PascalCase
+		// и обязательными считает только Login + ActivationCode.
+		const signUpData: any = signUpRequestStatus.data || {};
+		const confirmFormData = {
+			Login: signUpData.login || "",
+			ActivationCode: values.activationCode || "",
+			Email: signUpData.email || "",
+			Phone: signUpData.phone || "",
+			// Остальные поля бэк игнорирует (extra="ignore"),
+			// оставляем выравнивание с историческим контрактом пустыми строками.
+			Password: "",
+			Surname: "",
+			FirstName: "",
+			SecondName: "",
+			address: "",
+			ActivationRequestId: "",
+		};
 		confirmSignUp(confirmFormData);
 	};
 

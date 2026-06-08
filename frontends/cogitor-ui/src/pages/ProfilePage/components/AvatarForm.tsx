@@ -52,7 +52,7 @@ const AvatarForm: FC<AvatarViewInterface> = (props) => {
 				>
 					<Upload
 						beforeUpload={beforeUpload}
-						action="http://localhost:3000/user/avatar"
+						action="/api/user/avatar"
 					>
 						<EditOutlined />
 					</Upload>

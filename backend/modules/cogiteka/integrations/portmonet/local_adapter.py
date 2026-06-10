@@ -380,7 +380,11 @@ class LocalCogiAdapter:
             "LinksTo": _reg([]),
             "LinksFrom": _reg([]),
             "LinksSectors": _reg([]),
-            "Elements": _reg([]),
+            # «Углы» (Elements): ровно 4 элемента LeftUp/RightUp/LeftBottom/RightBottom.
+            # Источник — homonet.thanka_link c link_type в 4 corner-кодах
+            # (сид по миграции 2026_06_10_corners_link_type.sql).
+            # Видимость углов контролируется Thanka.VisibleElements (выше).
+            "Elements": _reg(self._corner_elements_for(row["id"]) if row else []),
             "LocationEvent": [{"Name": ""}, {"Name": ""}, {"Name": ""}],
             "Notifications": _reg([]),
             "SiteList": _reg([]),
@@ -1016,6 +1020,156 @@ class LocalCogiAdapter:
         )
         return rows
 
+    # --- corners (Elements) ---------------------------------------------------
+
+    # Канонический порядок углов (Область SOC, Cogi; PERVYI-RELIZ §«углы»):
+    # LeftUp, RightUp, LeftBottom, RightBottom — совпадает с coord[]
+    # в Canvas.jsx:42-45. Фронт рисует углы строго в этом порядке,
+    # поэтому бэк ВСЕГДА возвращает массив длины 4 (пустые — заглушки
+    # с ID="", чтобы позиции LeftUp/RightUp/LeftBottom/RightBottom
+    # держались стабильно даже когда часть углов не настроена).
+    _CORNER_CODES: tuple[str, ...] = (
+        "corner_left_up",
+        "corner_right_up",
+        "corner_left_bottom",
+        "corner_right_bottom",
+    )
+
+    def _corner_elements_for(self, parent_thanka_id: str) -> list[dict]:
+        """Собирает «углы» (Elements) тханки строго по канону V0.51.
+
+        Источник правды — `homonet.thanka_link` (left_thanka_id=parent,
+        right_thanka_id=угловая тханка, link_type_id ссылается на один
+        из 4 corner-кодов в `homonet.link_type`). Структура подтверждена
+        в 260423-DDL-V051-14.txt:893-907 и описана в KOGI.Metody_V1-10
+        (Get/SetElements, VisibleElements).
+
+        Возвращает РОВНО 4 элемента (LeftUp, RightUp, LeftBottom,
+        RightBottom) — пустые позиции это `{ID:"", Name:"", Annotation:"",
+        Image:0}`. Фронт читает 4 позиции напрямую по индексу coord[i]
+        (Canvas.jsx:42-45), сворачивание массива при пропуске угла
+        ломало бы соответствие «позиция ↔ угол».
+        """
+        empty = lambda: {"ID": "", "Name": "", "Annotation": "", "Image": 0}
+        if not parent_thanka_id:
+            return [empty() for _ in range(4)]
+
+        rows = _q(
+            """
+            SELECT lt.code AS code,
+                   t.thanka_id::text AS "ID",
+                   COALESCE(
+                       NULLIF(co.current_content->>'title', ''),
+                       NULLIF(NULLIF(t.title, ''), 'Новая тханка'),
+                       NULLIF(co.current_content->>'custom_url', ''),
+                       'Новая тханка'
+                   ) AS "Name",
+                   COALESCE(co.current_content->>'annotation', '') AS "Annotation"
+            FROM thanka_link tl
+            JOIN link_type lt ON lt.link_type_id = tl.link_type_id
+            JOIN thanka t ON t.thanka_id = tl.right_thanka_id
+            LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+            WHERE tl.left_thanka_id::text = %s
+              AND lt.code = ANY(%s::text[])
+              AND t.status <> 'deleted'
+            """,
+            (parent_thanka_id, list(self._CORNER_CODES)),
+        )
+        by_code = {r["code"]: r for r in rows}
+        out: list[dict] = []
+        for code in self._CORNER_CODES:
+            r = by_code.get(code)
+            if not r:
+                out.append(empty())
+                continue
+            out.append({
+                "ID":         r["ID"],
+                "Name":       r["Name"],
+                "Annotation": r["Annotation"],
+                # Image: 1 если у угловой тханки есть картинка в snapshot/файле.
+                # Здесь возвращаем 1 как по канону PHP-флоу (картинка лежит
+                # как image{ID}.jpg). Реальная проверка существования файла
+                # делается фронтом по 404 на загрузке — DIRPATH+/image{ID}.jpg.
+                "Image":      1,
+            })
+        return out
+
+    def _h_set_elements(self, params: dict) -> dict:
+        """SetElements — устанавливает «углы» тханки.
+
+        Канон KOGI.Metody:669: SetElements(Elements, Id). На вход
+        ожидается родительская тханка (Id) и массив Elements длиной 4
+        в порядке LeftUp/RightUp/LeftBottom/RightBottom. Каждый элемент:
+          { "ID": <thanka_uuid|""> }
+        Пустой ID = угол очищен (привязка удаляется).
+
+        Транзакция: для каждого из 4 кодов сначала DELETE существующих
+        ссылок (по парe parent+code), затем INSERT свежей при непустом ID.
+        Идемпотентно — повторный вызов с теми же Elements даёт тот же
+        результат.
+        """
+        parent_id = str(params.get("Id") or "").strip()
+        if not parent_id:
+            raise ValueError("Id is required for SetElements")
+
+        elements = params.get("Elements") or []
+        # На случай SOAP-обёртки {"RegisteredObject": [...]}
+        if isinstance(elements, dict):
+            elements = elements.get("RegisteredObject") or []
+        if not isinstance(elements, list):
+            elements = []
+        # Дополняем до 4 пустыми, обрезаем до 4 — порядок важен.
+        elements = (list(elements) + [{}] * 4)[:4]
+
+        # link_type_id по коду — одним запросом.
+        code_rows = _q(
+            "SELECT code, link_type_id::text AS id FROM link_type "
+            "WHERE code = ANY(%s::text[])",
+            (list(self._CORNER_CODES),),
+        )
+        code_to_id = {r["code"]: r["id"] for r in code_rows}
+        # Если миграция не накатана — отчётливо ругаемся.
+        missing = [c for c in self._CORNER_CODES if c not in code_to_id]
+        if missing:
+            raise RuntimeError(
+                f"link_type missing codes: {missing}. "
+                "Apply migration 2026_06_10_corners_link_type.sql."
+            )
+
+        for code, el in zip(self._CORNER_CODES, elements):
+            right_id = ""
+            if isinstance(el, dict):
+                right_id = str(el.get("ID") or el.get("Id") or "").strip()
+
+            # Сначала чистим старую привязку по (parent, code).
+            _q(
+                """
+                DELETE FROM thanka_link
+                WHERE left_thanka_id::text = %s
+                  AND link_type_id::text = %s
+                """,
+                (parent_id, code_to_id[code]),
+            )
+            if not right_id:
+                continue
+            # Защита от привязки тханки самой к себе (CHECK в DDL это и так не
+            # даст — но даём осмысленное сообщение раньше).
+            if right_id == parent_id:
+                raise ValueError("corner cannot reference the same thanka")
+            _q(
+                """
+                INSERT INTO thanka_link
+                    (left_thanka_id, right_thanka_id, link_type_id)
+                VALUES (%s::uuid, %s::uuid, %s::uuid)
+                """,
+                (parent_id, right_id, code_to_id[code]),
+            )
+
+        return {
+            "Id": parent_id,
+            "Elements": _reg(self._corner_elements_for(parent_id)),
+        }
+
     # --- utils ----------------------------------------------------------------
 
     def _avatar_list_for(self, login: str) -> list[dict]:
@@ -1378,6 +1532,8 @@ LocalCogiAdapter._dispatch = {  # type: ignore[attr-defined]
     "GetSitePage": LocalCogiAdapter._h_get_site_page,
     "CreateThanka": LocalCogiAdapter._h_create_thanka,
     "SetThanka": LocalCogiAdapter._h_set_thanka,
+    # SetElements — канон KOGI.Metody:669, устанавливает «углы» тханки.
+    "SetElements": LocalCogiAdapter._h_set_elements,
     "GetMyThanka": LocalCogiAdapter._h_get_my_thanka,
     "RemoveThanka": LocalCogiAdapter._h_remove_thanka,
     "CheckCustomURL": LocalCogiAdapter._h_check_custom_url,

@@ -12,7 +12,9 @@
 
 set -euo pipefail
 
-DB="${DB:-postgresql://homonet_app_auth:REMOVED@127.0.0.1:5432/homonet_v051_test}"
+# DB: для READ хватает homonet_app_auth, но для WRITE на avatar/author/subject/person
+# нужен владелец схемы. Используем sudo -u postgres для apply.
+DB_READ="${DB_READ:-postgresql://homonet_app_auth:REMOVED@127.0.0.1:5432/homonet_v051_test}"
 APPLY="${APPLY:-0}"
 
 # Правильные (из auth_user)
@@ -28,7 +30,7 @@ OLD_PERSON="1d4eb42f-cc4b-4cac-a2a3-643e97612904"
 LOGIN="test_login_001"
 
 psql_q() {
-  PGCLIENTENCODING=UTF8 psql "$DB" -v ON_ERROR_STOP=1 --pset=footer=off <<SQL
+  PGCLIENTENCODING=UTF8 psql "$DB_READ" -v ON_ERROR_STOP=1 --pset=footer=off <<SQL
 SET search_path TO homonet, public;
 $1
 SQL
@@ -101,8 +103,14 @@ if [ "$APPLY" != "1" ]; then
   exit 0
 fi
 
-echo "=== ПРИМЕНЯЮ В ТРАНЗАКЦИИ ==="
-PGCLIENTENCODING=UTF8 psql "$DB" -v ON_ERROR_STOP=1 --pset=footer=off \
+echo "=== ПРИМЕНЯЮ В ТРАНЗАКЦИИ (через sudo -u postgres) ==="
+if ! command -v sudo >/dev/null; then
+  echo "ОШИБКА: sudo не найден. Запусти скрипт от имени postgres вручную."
+  exit 1
+fi
+sudo -u postgres env PGCLIENTENCODING=UTF8 psql \
+  "postgresql:///homonet_v051_test?user=postgres" \
+  -v ON_ERROR_STOP=1 --pset=footer=off \
   -v NEW_AUTHOR="$NEW_AUTHOR" -v OLD_AUTHOR="$OLD_AUTHOR" \
   -v NEW_PERSON="$NEW_PERSON" -v OLD_PERSON="$OLD_PERSON" \
   -v OLD_SUBJ="$OLD_SUBJ" -v LOGIN="$LOGIN" <<'SQL'

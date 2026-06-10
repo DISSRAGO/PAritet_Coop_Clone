@@ -14,56 +14,53 @@ function Elements(props, imgDim, width, height) {
 
     const {data} = props
 
-    if (data.Elements == null) return (<></>);
+    if (data.Elements == null) return [];
 
-    let thankaArray = [];
+    // Координаты 4 углов (LeftUp, RightUp, LeftBottom, RightBottom) —
+    // строго соответствует порядку _CORNER_CODES в бэке
+    // (local_adapter.py:_CORNER_CODES). Не менять без правки бэка.
+    let coord = [];
+    coord[0] = { x: 0, y: 0 }       // LeftUp
+    coord[1] = { x: w / 2, y: 0 }   // RightUp
+    coord[2] = { x: 0, y: h / 2 }   // LeftBottom
+    coord[3] = { x: w / 2, y: h / 2 } // RightBottom
 
     let len = data.Elements.length;
     if (len > 4) len = 4;
 
-    for (let i = 0; i < len; i++) {
-        thankaArray[i] = {
-            Id: data.Elements[i].ID,
-            Description: data.Elements[i].Annotation,
-            Name: data.Elements[i].Name
-        }
-    }
-
-    let images = [];
-
-    for (let i = 0; i < len; i++) {
-        images[i] = new Image;
-        if (data.Elements[i].Image == 1) images[i].src = DIRPATH + '/image' + thankaArray[i].Id + '.jpg?' + data.Hash;
-        else images[i].src = DIRPATH + '/unfound.jpg?' + data.Hash;
-    }
-
-    //Координаты левых верхних углов
-    let coord = [];
-    coord[0] = { x: 0, y: 0 }
-    coord[1] = { x: w / 2, y: 0 }
-    coord[2] = { x: 0, y: h / 2 }
-    coord[3] = { x: w / 2, y: h / 2 }
-
-    //----------------------------------- 
+    //-----------------------------------
+    // Бэк возвращает ровно 4 угла: ненастроенные — заглушки с ID="".
+    // Пустые позиции НЕ рисуем вообще — это канон cogi.teka.ru
+    // (в boevoy версии один угол виден, остальные три пусты).
     function generateShapes() {
         let arr = [];
         for (let i = 0; i < len; i++) {
+            const el = data.Elements[i] || {};
+            // Пропускаем заглушку — слот без привязки остаётся пустым.
+            if (!el.ID) continue;
+            const img = new Image();
+            img.src = (el.Image == 1)
+                ? DIRPATH + '/image' + el.ID + '.jpg?' + data.Hash
+                : DIRPATH + '/unfound.jpg?' + data.Hash;
             arr.push({
                 x: coord[i].x,
                 y: coord[i].y,
                 width: w / 2,
                 height: h / 2,
-                Id: thankaArray[i].Id,
-                Name: thankaArray[i].Name,
-                Description: thankaArray[i].Description,
-                Image: data.Elements[i].Image,
-                headerName: thankaArray[i].Name,
+                Id: el.ID,
+                Name: el.Name,
+                Description: el.Annotation,
+                Image: el.Image,
+                headerName: el.Name,
                 stroke: strokeColour,
                 strokeWidth: 3,
-                fillPatternImage: images[i],
+                fillPatternImage: img,
                 fillPatternScaleX: (w / 2) / imgDim,
                 fillPatternScaleY: (h / 2) / imgDim,
-                isSelect: false
+                isSelect: false,
+                // Позиция в data.Elements (0..3) — LeftUp/RightUp/LeftBottom/RightBottom.
+                // Click handler в onClick() использует mousePosition.elem как этот индекс.
+                elemIndex: i,
             })
         }
         return arr;
@@ -911,7 +908,12 @@ function Canvas(props) {
         }
         if (mousePosition.elem !== false
             && Array.isArray(data.Elements)
-            && data.Elements[mousePosition.elem]) {
+            && data.Elements[mousePosition.elem]
+            // Бэк отдаёт ровно 4 угла; ненастроенные позиции — заглушки с
+            // ID="". В таком случае navigate('/navigator/') ломал бы роутер,
+            // поэтому пустые углы клик игнорируют (как и канон cogi.teka.ru:
+            // на пустых углах ничего не происходит).
+            && data.Elements[mousePosition.elem].ID) {
             address = '/navigator/' + data.Elements[mousePosition.elem].ID;
         }
         // mousePosition может успеть сброситься на elem между mouseMove и onClick

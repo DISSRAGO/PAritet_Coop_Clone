@@ -498,8 +498,14 @@ class LocalCogiAdapter:
         # Найдём author_id для пользователя.
         # Приоритет — SubjectId (канон V0.51); fallback на login для совместимости с
         # фронтами, которые ещё не перевелись на subject_id.
-        if subject_id_param:
-            author_id = self._ensure_author_by_subject(subject_id=subject_id_param)
+        # PR #41: SubjectId валидируется через _resolve_owner_subject_id
+        # (должен принадлежать залогиненному login’у). Иначе используем login-ветку.
+        verified_subject_id = self._resolve_owner_subject_id(
+            subject_id_param=subject_id_param,
+            user_login=user_login,
+        )
+        if verified_subject_id:
+            author_id = self._ensure_author_by_subject(subject_id=verified_subject_id)
         else:
             author_id = self._ensure_author_for(login=user_login)
 
@@ -508,8 +514,8 @@ class LocalCogiAdapter:
         # потомком кабинета пользователя. Сам кабинет исключён из выравнивания
         # (он и есть корень).
         if not parent_id and not (isinstance(thanka, dict) and thanka.get("IsCabinet")):
-            if subject_id_param:
-                cabinet_id = self._cabinet_id_by_subject(subject_id=subject_id_param)
+            if verified_subject_id:
+                cabinet_id = self._cabinet_id_by_subject(subject_id=verified_subject_id)
             else:
                 cabinet_id = self._cabinet_id_for(login=user_login)
             if cabinet_id:
@@ -712,8 +718,13 @@ class LocalCogiAdapter:
         if not login and not subject_id_param:
             return {"Id": ""}
 
-        if subject_id_param:
-            author_id = self._ensure_author_by_subject(subject_id=subject_id_param)
+        # PR #41: валидируем что SubjectId принадлежит login’у.
+        verified_subject_id = self._resolve_owner_subject_id(
+            subject_id_param=subject_id_param,
+            user_login=login,
+        )
+        if verified_subject_id:
+            author_id = self._ensure_author_by_subject(subject_id=verified_subject_id)
         else:
             author_id = self._ensure_author_for(login=login)
         if not author_id:
@@ -1159,6 +1170,84 @@ class LocalCogiAdapter:
             (author_id, login),
         )
         return author_id
+
+    def _resolve_owner_subject_id(
+        self,
+        subject_id_param: str,
+        user_login: str,
+    ) -> str:
+        """Валидирует что переданный фронтом SubjectId принадлежит залогиненному
+        пользователю. Если не принадлежит — возвращает пустую строку, чтобы
+        вызывающий код пошёл по login-ветке.
+
+        Корень бага (PR #39 + #40): фронт мог прислать произвольный SubjectId,
+        бэк ему доверялся, и _ensure_author_by_subject создавал нового author
+        под чужой/сиротский subject. В итоге у одного login оказывалось два
+        разных subject в БД, и часть тханок (созданных с подделанным SubjectId)
+        выпадала из _my_thanka_rows, который джойнит через avatar.login.
+
+        Правила валидации:
+        1. Пустой SubjectId → пустая строка (это сигнал использовать login-ветку).
+        2. SubjectId == auth_user.subject_id для данного login → разрешён.
+        3. SubjectId соответствует other-subject (org/community) к которому
+           login имеет принадлежность через будущую таблицу subject_member
+           (TODO) → пока разрешён, валидируется только существование subject.
+           Это нужно потому что collective/organizational subject'ы должны
+           уметь создавать тханки от своего имени.
+        4. Всё остальное → пустая строка + предупреждение в stderr.
+        """
+        sid = (subject_id_param or "").strip()
+        if not sid:
+            return ""
+
+        # 1. Subject вообще существует?
+        subj = _q(
+            "SELECT subject_kind::text AS kind, person_id::text AS pid FROM subject WHERE subject_id::text = %s",
+            (sid,),
+        )
+        if not subj:
+            import sys
+            print(
+                f"[security] _resolve_owner_subject_id: SubjectId {sid!r} "
+                f"не существует, fallback на login={user_login!r}",
+                file=sys.stderr,
+            )
+            return ""
+
+        kind = (subj[0]["kind"] or "").lower()
+
+        # 2. Personal subject — должен совпадать с auth_user.subject_id
+        if kind == "personal":
+            if not user_login:
+                # Невозможно проверить принадлежность без login → отвергаем.
+                import sys
+                print(
+                    f"[security] _resolve_owner_subject_id: personal SubjectId "
+                    f"{sid!r} без login — отказ",
+                    file=sys.stderr,
+                )
+                return ""
+            au = _q(
+                "SELECT subject_id::text AS sid FROM auth_user WHERE login = %s",
+                (user_login,),
+            )
+            if not au:
+                return ""
+            owner_sid = au[0]["sid"]
+            if owner_sid and owner_sid == sid:
+                return sid
+            import sys
+            print(
+                f"[security] _resolve_owner_subject_id: personal SubjectId {sid!r} "
+                f"не принадлежит login={user_login!r} (его subject_id={owner_sid!r}), "
+                f"fallback на login-ветку",
+                file=sys.stderr,
+            )
+            return ""
+
+        # 3. Org/community subject — пока разрешён по факту существования.
+        # TODO: проверять membership через subject_member когда таблица появится.
+        return sid
 
     def _ensure_author_by_subject(self, subject_id: str) -> str:
         """Обратный путь к _ensure_author_for: идём от subject_id (Stage 3 PR 4).

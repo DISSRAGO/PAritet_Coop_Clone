@@ -793,6 +793,40 @@ async def set_thanka_endpoint(request: Request):
     else:
         return json_response({"Error": "unknown EditorType"}, status_code=400)
 
+    # «Углы» (Elements) — после успешного Set/Create вызываем SetElements
+    # отдельно (канон KOGI.Metody:669). Фронт присылает Elements как:
+    #   - массив строк UUID:        ["<uuid>", "", "", ""]
+    #   - массив объектов:           [{"ID":"<uuid>"}, ...]
+    #   - строку через точку с запятой: "<uuid>;;;" (legacy multipart)
+    # Порядок всегда: LeftUp, RightUp, LeftBottom, RightBottom.
+    if result_id and "Elements" in data:
+        raw_elements = data.get("Elements")
+        if isinstance(raw_elements, str):
+            # legacy formats: CSV или точка-с-запятой
+            sep = ";" if ";" in raw_elements else ","
+            elements_list = [
+                {"ID": s.strip()} for s in raw_elements.split(sep)
+            ]
+        elif isinstance(raw_elements, list):
+            elements_list = [
+                ({"ID": str(it).strip()} if not isinstance(it, dict)
+                 else {"ID": str(it.get("ID") or it.get("Id") or "").strip()})
+                for it in raw_elements
+            ]
+        else:
+            elements_list = []
+        # Вызываем только если хотя бы один угол прислан (пусть и для очистки).
+        # Пустой массив или ["", "", "", ""] — валидный вызов «очистить все»,
+        # но при создании новой тханки без привязок вызов совсем
+        # лишний — пропускаем.
+        if any(el.get("ID") for el in elements_list):
+            ad.execute("SetElements", {"Id": result_id, "Elements": elements_list})
+        elif editor_type == "edit":
+            # При редактировании пустой массив значит «очистить все углы» —
+            # нужно вызвать SetElements с пустыми, иначе старые привязки
+            # останутся.
+            ad.execute("SetElements", {"Id": result_id, "Elements": elements_list})
+
     if "Picture" in files and result_id:
         pc = data.get("PictureCoords")
         if isinstance(pc, dict):

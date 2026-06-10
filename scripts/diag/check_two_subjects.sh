@@ -25,7 +25,7 @@ psql_q() {
 
 echo "=== 1. auth_user для логина '$LOGIN' (ОДИН РЯД ИЛИ НЕСКОЛЬКО?) ==="
 psql_q "
-SELECT user_id::text, login, person_id::text, subject_id::text, status, created_at
+SELECT user_id::text, login, person_id::text, subject_id::text, is_active, created_at
 FROM auth_user
 WHERE login = '$LOGIN'
 ORDER BY created_at;
@@ -34,7 +34,7 @@ ORDER BY created_at;
 echo ""
 echo "=== 2. Все author-ряды для логина (через avatar.login) ==="
 psql_q "
-SELECT a.author_id::text, a.subject_id::text, a.display_name, a.created_at, av.login
+SELECT a.author_id::text, a.subject_id::text, a.display_name, a.created_at AS author_created, av.login, av.status AS avatar_status
 FROM author a
 LEFT JOIN avatar av ON av.author_id = a.author_id
 WHERE av.login = '$LOGIN'
@@ -86,7 +86,7 @@ ORDER BY a.subject_id, t.created_at;
 echo ""
 echo "=== 6. Avatar-ряды для двух subject ==="
 psql_q "
-SELECT av.avatar_id::text, av.author_id::text, av.login, av.status, a.subject_id::text
+SELECT av.avatar_id::text, av.author_id::text, av.login, av.status AS av_status, a.subject_id::text
 FROM avatar av
 JOIN author a ON a.author_id = av.author_id
 WHERE a.subject_id::text IN ('$SUBJ_A', '$SUBJ_B')
@@ -96,7 +96,8 @@ ORDER BY a.subject_id;
 echo ""
 echo "=== 7. Person-ряды (если subject_kind=personal, у обоих д.б. person) ==="
 psql_q "
-SELECT s.subject_id::text, s.person_id::text, p.display_name AS person_name, s.subject_kind, s.display_name AS subj_name
+SELECT s.subject_id::text, s.subject_kind, s.person_id::text, s.organization_id::text, s.community_id::text,
+       p.display_name AS person_name, s.display_name AS subj_name, s.created_at
 FROM subject s
 LEFT JOIN person p ON p.person_id = s.person_id
 WHERE s.subject_id::text IN ('$SUBJ_A', '$SUBJ_B');

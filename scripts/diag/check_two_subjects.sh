@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 # Диагностика: у test_login_001 в БД найдены ДВА разных subject_id.
-# Цель — понять кто из двух «правильный» (auth_user.subject_id) и откуда взялся второй.
-#
-# Корни проблемы:
-#   Warhammer/Cabinet/WoC -> author d7da7179 -> subject 3419135c (правильный?)
-#   MPG                   -> author b16eb45b -> subject dac9c63a (откуда?)
-#
-# Этот скрипт собирает ВСЁ что нужно для решения: какой subject в auth_user,
-# какие author-ряды есть, есть ли отдельный аватар, кабинет, person.
+# v3: используем stdin вместо `-c` потому что psql при многострочном `-c`
+# выводит только результат ПОСЛЕДНЕГО statement. SET search_path в начале
+# работает, но результаты SELECT'ов которые шли после SET — теряются.
 
 set -euo pipefail
 
@@ -17,10 +12,10 @@ SUBJ_A="3419135c-ee62-4567-94b9-d83c3c812578"
 SUBJ_B="dac9c63a-1ee1-4168-8717-500da7985ac7"
 
 psql_q() {
-  PGCLIENTENCODING=UTF8 psql "$DB" -v ON_ERROR_STOP=1 --pset=footer=off -c "
-    SET search_path TO homonet, public;
-    $1
-  "
+  PGCLIENTENCODING=UTF8 psql "$DB" -v ON_ERROR_STOP=1 --pset=footer=off <<SQL
+SET search_path TO homonet, public;
+$1
+SQL
 }
 
 echo "=== 1. auth_user для логина '$LOGIN' (ОДИН РЯД ИЛИ НЕСКОЛЬКО?) ==="
@@ -49,7 +44,7 @@ FROM subject s
 WHERE s.subject_id::text IN (
    SELECT subject_id::text FROM auth_user WHERE login = '$LOGIN' AND subject_id IS NOT NULL
    UNION
-   SELECT a.subject_id::text FROM author a JOIN avatar av ON av.author_id = a.author_id WHERE av.login = '$LOGIN'
+   SELECT a.subject_id::text FROM author a JOIN avatar av ON av.author_id = a.author_id WHERE av.login = '$LOGIN' AND a.subject_id IS NOT NULL
    UNION
    SELECT '$SUBJ_A'::text UNION SELECT '$SUBJ_B'::text
 )
@@ -94,7 +89,7 @@ ORDER BY a.subject_id;
 "
 
 echo ""
-echo "=== 7. Person-ряды (если subject_kind=personal, у обоих д.б. person) ==="
+echo "=== 7. Subject-ряды для двух subject (personal/community/organization) ==="
 psql_q "
 SELECT s.subject_id::text, s.subject_kind, s.person_id::text, s.organization_id::text, s.community_id::text,
        p.display_name AS person_name, s.display_name AS subj_name, s.created_at
@@ -107,5 +102,5 @@ echo ""
 echo "=== 8. ВЫВОД ==="
 echo "  - Если в (1) ровно один auth_user — то 'правильный' subject_id это тот что в auth_user.subject_id."
 echo "  - Если в (4) есть кабинет ТОЛЬКО для одного subject — второй subject это сирота."
-echo "  - Если в (7) у обоих subject один и тот же person_id — оба subject принадлежат одному человеку (это нарушение UNIQUE на person_id+kind='personal')."
-echo "  - На основе этого решаем: UPDATE MPG.author_id на правильный, либо merge subject."
+echo "  - Если в (7) у обоих subject один и тот же person_id — нарушение UNIQUE (по идее невозможно)."
+echo "  - Если subject_kind у второго subject != 'personal' — это organization или community subject."

@@ -59,10 +59,19 @@ function Elements(props) {
         setElements(selectedElements);
     }, [selectedElements]);
 
-    // Источник опций — MyThankaList владельца, бэк уже его прислал.
-    // RegisteredObject — стандартный SOAP-обёртка коллекций (см. _reg).
-    const myThankaRaw = (data && data.MyThankaList && data.MyThankaList.RegisteredObject) || [];
-    const myThankaList = Array.isArray(myThankaRaw) ? myThankaRaw : [myThankaRaw];
+    // Источник опций — MyThankaList владельца. Бэк в _h_get_thanka кладёт
+    // его как SOAP-обёртку {RegisteredObject:[...]}, но routers/thanka.py
+    // в normalize_get_thanka_result:430 распаковывает в плоский массив
+    // через registered(). Поэтому на фронте приходит уже list,
+    // а не dict (это тот же паттерн, что и data.Elements / data.Children).
+    // На всякий случай поддерживаем оба варианта.
+    let myThankaRaw = (data && data.MyThankaList) || [];
+    if (myThankaRaw && !Array.isArray(myThankaRaw) && myThankaRaw.RegisteredObject) {
+        myThankaRaw = myThankaRaw.RegisteredObject;
+    }
+    const myThankaList = Array.isArray(myThankaRaw)
+        ? myThankaRaw
+        : (myThankaRaw ? [myThankaRaw] : []);
 
     // EditorTableViewer (таблица-подсказка стихий) — оставляем как было,
     // подкачка getCatalogs независима от выбора углов.

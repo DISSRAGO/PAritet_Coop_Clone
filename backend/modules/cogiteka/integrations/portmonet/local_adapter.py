@@ -318,9 +318,14 @@ class LocalCogiAdapter:
             "avatar":     ("Аватар",       "аватар",     "аватара"),
             "article":    ("Статья",       "статью",     "статьи"),
             "site":       ("Страница сайта", "сайт",        "сайта"),
+            "catalog":    ("Каталог",       "каталог",   "каталога"),
             "collection": ("Коллекция",    "коллекцию", "коллекции"),
             "document":   ("Документ",     "документ",  "документа"),
             "cabinet":    ("Кабинет",      "кабинет",  "кабинета"),
+            "request":    ("Сервис",       "сервис",    "сервиса"),
+            "link":       ("Ссылка",       "ссылку",     "ссылки"),
+            "repost":     ("Репост",       "репост",     "репоста"),
+            "product":    ("Товар",        "товар",      "товара"),
         }
         type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
 
@@ -351,20 +356,91 @@ class LocalCogiAdapter:
             top_main_page = {"ID": thanka_obj["Id"], "Url": ""}
             top_hash = str(content.get("hash") or "")
 
+        # PR P0: возвращаем все типовые поля, которые теперь сохраняет
+        # _build_content. Без этого edit-форма открывалась пустой, хотя
+        # в jsonb всё было — потому что Object в ответе содержал только
+        # 4 ключа и Request всегда был пустым шаблоном.
+        # Пропускаем только реально непустые поля — иначе CogObjEditor.jsx
+        # получит «строковые» undefined вместо фактических значений.
+        object_payload: dict = {
+            "Type": obj_type,
+            "Description": content.get("description") or "",
+            "Name": thanka_obj["Name"],
+            # Object.Filename читает CogObject.jsx для отрисовки
+            # iframe с PDF-файлом (DIRPATH+"/pdf/"+object.Filename).
+            "Filename": content.get("filename") or "",
+        }
+        # Cogi.Article
+        if content.get("date_event") is not None:
+            object_payload["DateEvent"] = content.get("date_event") or ""
+        if content.get("real_author") is not None:
+            object_payload["RealAuthor"] = content.get("real_author") or ""
+        if content.get("url") is not None:
+            object_payload["URL"] = content.get("url") or ""
+        # Cogi.Avatar
+        if content.get("birth_date") is not None:
+            object_payload["BirthDate"] = content.get("birth_date") or ""
+        if content.get("telephone_number") is not None:
+            object_payload["TelephoneNumber"] = content.get("telephone_number") or ""
+        if content.get("email") is not None:
+            object_payload["Email"] = content.get("email") or ""
+        # Для avatar Object.Name перебиваем на хранимый avatar_name
+        # (выше лежит title тханки в thanka_obj["Name"]).
+        if obj_type == "avatar" and content.get("avatar_name"):
+            object_payload["Name"] = content.get("avatar_name") or thanka_obj["Name"]
+        # product
+        if content.get("product_id") is not None:
+            object_payload["ProductId"] = content.get("product_id") or ""
+        if content.get("category_id") is not None:
+            object_payload["CategoryId"] = content.get("category_id") or ""
+        if content.get("category_name") is not None:
+            object_payload["CategoryName"] = content.get("category_name") or ""
+
+        # Thanka.ThankaLink — для link/repost фронт ждёт его в Thanka.
+        if content.get("thanka_link"):
+            thanka_obj["ThankaLink"] = content.get("thanka_link") or ""
+
+        # LocationEvent — всегда отдаём массив из 3 элементов формата
+        # [{Name:...}] (фронт ожидает этот формат, см. LocationEditor).
+        # Если в jsonb хранится массив строк — оборачиваем в {Name}.
+        loc_stored = content.get("location_event")
+        loc_out: list = [{"Name": ""}, {"Name": ""}, {"Name": ""}]
+        if isinstance(loc_stored, list):
+            for i in range(min(3, len(loc_stored))):
+                item = loc_stored[i]
+                if isinstance(item, dict):
+                    loc_out[i] = {"Name": str(item.get("Name") or "")}
+                else:
+                    loc_out[i] = {"Name": str(item or "")}
+
+        # Request (Бот) — восстанавливаем из content['request'] поверх
+        # дефолтного шаблона (он гарантирует Fields, иначе RequestEditor
+        # крашится на .split(',')).
+        request_payload = _default_request()
+        req_stored = content.get("request") if isinstance(content.get("request"), dict) else None
+        if req_stored:
+            for src_key, dst_key in (
+                ("fields",        "Fields"),
+                ("picture",       "Picture"),
+                ("categories",    "Categories"),
+                ("sort_order",    "SortOrder"),
+                ("sort_field",    "SortField"),
+                ("start_date",    "StartDate"),
+                ("end_date",      "EndDate"),
+                ("query_name",    "QueryName"),
+                ("special_props", "SpecialProps"),
+                ("search_string", "SearchString"),
+            ):
+                if req_stored.get(src_key) is not None:
+                    request_payload[dst_key] = req_stored.get(src_key)
+
         return {
             "Id": thanka_obj["Id"],
             "CabinetId": 0,
             "IsAdmin": True,
             "PrivacyLevel": privacy_level,
             "Thanka": thanka_obj,
-            "Object": {
-                "Type": obj_type,
-                "Description": content.get("description") or "",
-                "Name": thanka_obj["Name"],
-                # Object.Filename читает CogObject.jsx для отрисовки
-                # iframe с PDF-файлом (DIRPATH+"/pdf/"+object.Filename).
-                "Filename": content.get("filename") or "",
-            },
+            "Object": object_payload,
             "MainPage": top_main_page,
             "Hash": top_hash,
             "Removed": False,
@@ -385,13 +461,13 @@ class LocalCogiAdapter:
             # (сид по миграции 2026_06_10_corners_link_type.sql).
             # Видимость углов контролируется Thanka.VisibleElements (выше).
             "Elements": _reg(self._corner_elements_for(row["id"]) if row else []),
-            "LocationEvent": [{"Name": ""}, {"Name": ""}, {"Name": ""}],
+            "LocationEvent": loc_out,
             "Notifications": _reg([]),
             "SiteList": _reg([]),
             "Style": "",
             "ChildrenImage": {},
             "DocImage": {},
-            "Request": _default_request(),
+            "Request": request_payload,
             "TypeName": type_name,
             "Accusativus": accus,
             "Genitivus": genit,
@@ -538,10 +614,20 @@ class LocalCogiAdapter:
             raise RuntimeError("failed to insert thanka")
         new_thanka_id = rows[0]["id"]
 
+        # PR P0: LocationEvent лежит на верхнем уровне payload, а не в Object
+        # (см. submitThanka.js, dataToEditor.LocationEvent = selectedLocation).
+        # Пробрасываем в _build_content через defaults.
+        location_event = params.get("LocationEvent")
+        request_block = params.get("Request")
         content = self._build_content(
             thanka=thanka,
             obj=obj,
-            defaults={"title": title, "parent_id": parent_id},
+            defaults={
+                "title": title,
+                "parent_id": parent_id,
+                "location_event": location_event,
+            },
+            request=request_block,
         )
         _q(
             """
@@ -600,7 +686,17 @@ class LocalCogiAdapter:
             except Exception:
                 existing = {}
 
-        content = self._build_content(thanka=thanka, obj=obj, defaults={"title": title}, base=existing)
+        # PR P0: также пробрасываем LocationEvent (верхний уровень)
+        # и блок Request (Для Бота).
+        location_event = params.get("LocationEvent")
+        request_block = params.get("Request")
+        content = self._build_content(
+            thanka=thanka,
+            obj=obj,
+            defaults={"title": title, "location_event": location_event},
+            base=existing,
+            request=request_block,
+        )
         _q(
             """
             INSERT INTO cogobject (thanka_id, current_content)
@@ -830,8 +926,21 @@ class LocalCogiAdapter:
         obj: Any,
         defaults: dict,
         base: dict | None = None,
+        request: Any = None,
     ) -> dict:
-        """Собирает payload для cogobject.current_content из Thanka/Object."""
+        """Собирает payload для cogobject.current_content из Thanka/Object/Request.
+
+        PR P0 (аудит типов тханки): расширили перечень сохраняемых типовых
+        полей. До этого в current_content попадало только title/description/
+        type/filename/custom_url/annotation/privacy/parent_id и круги — то есть
+        фронт честно слал DateEvent/LocationEvent/RealAuthor/URL/BirthDate/
+        Telephone/Email/ProductId/ThankaLink/Request.*, а бэк их молча
+        выбрасывал. После edit-формы все типовые поля терялись.
+
+        Канон названий по KOGI.Metody / Cogi.Article / Cogi.Document /
+        Cogi.Avatar — пишем их в snake_case в jsonb. _h_get_thanka читает
+        обратно зеркально.
+        """
         content = dict(base or {})
         title = defaults.get("title") or content.get("title") or ""
         content["title"] = title
@@ -847,6 +956,48 @@ class LocalCogiAdapter:
             # Пустая строка — явное удаление файла (сбрасываем).
             if obj.get("Filename") is not None:
                 content["filename"] = str(obj.get("Filename") or "")
+
+            # --- Cogi.Article ---
+            # DateEvent (дата события), LocationEvent (массив до 3 элементов
+            # из LocationEditor), RealAuthor (текст автора-источника),
+            # URL (Object.URL — ссылка на источник). Cogi.Article в
+            # KOGI.Metody включает все эти поля. Cogi.Document по доке —
+            # только Description/URL/RealAuthor, но мы храним по тем же
+            # ключам: фронт сам не шлёт DateEvent/LocationEvent для
+            # document (submitThanka.js различает ветки).
+            if obj.get("DateEvent") is not None:
+                content["date_event"] = str(obj.get("DateEvent") or "")
+            if obj.get("RealAuthor") is not None:
+                content["real_author"] = str(obj.get("RealAuthor") or "")
+            if obj.get("URL") is not None:
+                content["url"] = str(obj.get("URL") or "")
+
+            # --- Cogi.Avatar ---
+            # AvatarName/BirthDate/TelephoneNumber/Email. Object.Name для
+            # avatar — это отображаемое имя кабинета (поле avatarName в
+            # форме), его кладём отдельно от заголовка тханки.
+            if obj.get("BirthDate") is not None:
+                content["birth_date"] = str(obj.get("BirthDate") or "")
+            if obj.get("TelephoneNumber") is not None:
+                content["telephone_number"] = str(obj.get("TelephoneNumber") or "")
+            if obj.get("Email") is not None:
+                content["email"] = str(obj.get("Email") or "")
+            # Object.Name для avatar отличается от Thanka.Name: первый — это
+            # человекочитаемое имя в кабинете, второй — title тханки. Чтобы
+            # не путаться с title, сохраняем отдельно.
+            if str(content.get("type") or "") == "avatar" and obj.get("Name") is not None:
+                content["avatar_name"] = str(obj.get("Name") or "")
+
+            # --- product ---
+            # ProductId / CategoryId / CategoryName. Источник правды —
+            # ProductEditor, который выбирает товар из каталога товаров.
+            if obj.get("ProductId") is not None:
+                content["product_id"] = str(obj.get("ProductId") or "")
+            if obj.get("CategoryId") is not None:
+                content["category_id"] = str(obj.get("CategoryId") or "")
+            if obj.get("CategoryName") is not None:
+                content["category_name"] = str(obj.get("CategoryName") or "")
+
         content.setdefault("description", "")
         content.setdefault("type", "article")
 
@@ -860,6 +1011,64 @@ class LocalCogiAdapter:
                     content["privacy"] = int(thanka.get("Privacy"))
                 except (TypeError, ValueError):
                     pass
+            # --- link / repost ---
+            # Cogi.Thanka.ThankaLink — UUID целевой тханки. Фронт шлёт
+            # его в Thanka.ThankaLink (см. submitThanka.js, ветка
+            # selectedType == 'link' || 'repost').
+            if thanka.get("ThankaLink") is not None:
+                content["thanka_link"] = str(thanka.get("ThankaLink") or "")
+
+        # --- LocationEvent ---
+        # LocationEvent лежит не в Object, а на верхнем уровне payload —
+        # submitThanka.js шлёт dataToEditor.LocationEvent (массив строк или
+        # массив объектов {Name}). Принимаем оба формата, нормализуем
+        # к массиву строк (до 3 элементов — координаты location-уровней).
+        loc_raw = None
+        if isinstance(obj, dict) and obj.get("LocationEvent") is not None:
+            loc_raw = obj.get("LocationEvent")
+        # верхний уровень params на самом деле передаётся через kwargs ниже;
+        # _build_content не видит params напрямую, поэтому location пробрасывается
+        # через defaults['location_event'] из _h_create_thanka / _h_set_thanka.
+        if loc_raw is None:
+            loc_raw = defaults.get("location_event")
+        if loc_raw is not None:
+            if isinstance(loc_raw, list):
+                norm = []
+                for item in loc_raw:
+                    if isinstance(item, dict):
+                        norm.append(str(item.get("Name") or ""))
+                    else:
+                        norm.append(str(item or ""))
+                content["location_event"] = norm
+            elif isinstance(loc_raw, str):
+                content["location_event"] = [loc_raw]
+
+        # --- request (Бот, KOGI:219 Request.Service) ---
+        # Сохраняем весь блок Request под ключом 'request' (dict) — это
+        # настройки сервиса: Fields (CSV), Picture, Categories, SortOrder,
+        # SortField, StartDate, EndDate, QueryName, SpecialProps, SearchString.
+        if isinstance(request, dict) and request:
+            req_norm: dict = {}
+            for src_key, dst_key in (
+                ("Fields",       "fields"),
+                ("Picture",      "picture"),
+                ("Categories",   "categories"),
+                ("SortOrder",    "sort_order"),
+                ("SortField",    "sort_field"),
+                ("StartDate",    "start_date"),
+                ("EndDate",      "end_date"),
+                ("QueryName",    "query_name"),
+                ("SpecialProps", "special_props"),
+                ("SearchString", "search_string"),
+            ):
+                if request.get(src_key) is not None:
+                    req_norm[dst_key] = request.get(src_key)
+            if req_norm:
+                # мердж с тем, что уже было — на случай частичных апдейтов
+                existing_req = content.get("request") if isinstance(content.get("request"), dict) else {}
+                merged = dict(existing_req or {})
+                merged.update(req_norm)
+                content["request"] = merged
 
         # parent_id — идентификатор родительской тханки. Берём из defaults
         # (пробрасывается из _h_create_thanka), если был — оставляем в base.

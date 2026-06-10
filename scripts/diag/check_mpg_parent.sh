@@ -13,6 +13,10 @@ fi
 
 DB="${DATABASE_URL:?DATABASE_URL не задан (export DATABASE_URL=postgresql://...)}"
 
+# Таблицы живут в схеме homonet (см. backend/shared/db.py:56),
+# а не в public. Пробрасываем search_path всем psql-вызовам ниже.
+export PGOPTIONS="--search_path=homonet,public"
+
 echo "=== 1. Сама MPG ==="
 psql "$DB" -c "
 SELECT t.thanka_id::text AS id,

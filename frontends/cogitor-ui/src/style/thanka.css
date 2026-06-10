@@ -434,6 +434,24 @@ input[type='checkbox'] {
     width: 55px;
 }
 
+#elements td {
+    padding: 4px 6px;
+    vertical-align: top;
+}
+
+#elements label {
+    display: inline-block;
+    font-size: 11pt;
+    color: #444;
+}
+
+.corner-select {
+    margin-top: 2px;
+    padding: 4px 6px;
+    font-size: 11pt;
+    max-width: 220px;
+}
+
 .tableButton {
     display: inline;
 }

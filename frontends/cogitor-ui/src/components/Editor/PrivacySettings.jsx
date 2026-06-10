@@ -11,6 +11,13 @@ import { SystemMessage } from "../Viewer/SystemMessage.jsx";
 
 import { EditorTableViewer } from "../../components/Table/TableInterface.jsx";
 
+// Компонент «Углы» (Elements) — 4 слота под выбор тханки.
+// Порядок ровно как в каноне (KOGI.Metody:669) и в Canvas.jsx:
+//   [0] LeftUp, [1] RightUp, [2] LeftBottom, [3] RightBottom.
+// Источник списка — data.MyThankaList.RegisteredObject (см. _h_get_thanka:377):
+// бэк уже подгружает в каждое открытие тханки список тханок владельца.
+// «не задано» (ID="") — это валидный «пустой» угол: Canvas рисует пустой
+// слот, бэк через SetElements делает идемпотентный DELETE+INSERT по 4 кодам.
 function Elements(props) {
 
     const { data, elemArr, setElements } = props;
@@ -18,18 +25,31 @@ function Elements(props) {
     //таблица-подсказка для стихий
     const [isTableVision, setTableVision] = useState(false);
 
-    const [selectedElements, setSelectedElements] = useState(elemArr);
+    // Гарантируем длину 4, иначе select по i=2/3 уйдёт в undefined и
+    // потеряет VisibleElements при первом submit без правок углов.
+    const padTo4 = (arr) => {
+        const out = Array.isArray(arr) ? arr.slice(0, 4) : [];
+        while (out.length < 4) out.push("");
+        return out;
+    };
+
+    const [selectedElements, setSelectedElements] = useState(padTo4(elemArr));
 
     useEffect(() => {
-        if (data.Elements != null && selectedElements.length == 0) {
-            setSelectedElements(elemArr);
+        // При первом приходе elemArr (после async _corner_elements_for) — 
+        // подтягиваем выбранные углы. Не затираем, если пользователь уже
+        // успел руками что-то выбрать.
+        if (Array.isArray(elemArr) && elemArr.length > 0) {
+            const padded = padTo4(elemArr);
+            const isEmpty = selectedElements.every((v) => !v);
+            if (isEmpty) setSelectedElements(padded);
         }
     }, [elemArr]);
 
     const onChangeElements = (e) => {
-        let elements = selectedElements.slice(0);
-        let i = e.target.name;
-        elements[i] = e.target.value;
+        const elements = selectedElements.slice(0);
+        const i = Number(e.target.name);
+        elements[i] = e.target.value || "";
         setSelectedElements(elements);
     };
 
@@ -39,36 +59,61 @@ function Elements(props) {
         setElements(selectedElements);
     }, [selectedElements]);
 
-    const [list, setList] = useState(data.Elements)
+    // Источник опций — MyThankaList владельца, бэк уже его прислал.
+    // RegisteredObject — стандартный SOAP-обёртка коллекций (см. _reg).
+    const myThankaRaw = (data && data.MyThankaList && data.MyThankaList.RegisteredObject) || [];
+    const myThankaList = Array.isArray(myThankaRaw) ? myThankaRaw : [myThankaRaw];
 
+    // EditorTableViewer (таблица-подсказка стихий) — оставляем как было,
+    // подкачка getCatalogs независима от выбора углов.
+    const [list, setList] = useState(data.Elements)
     useEffect(() => {
-        //if (data.Elements == null) {
-        //функция, которая вызывает список каталогов
         axios({
             method: "post",
             url: PATH + "thanka/thanka.php",
-            //данные отправятся в $_POST и $_FILES, а то мы не вытащим оттуда картинку
             headers: { "content-type": "multipart/form-data" },
             data: {method: "getCatalogs"},
         }).then((result) => {
             setList(result.data.List)
         }).catch((error) => {
-            
+            /* подсказочная таблица не критична */
         })
-    //}
     },[])
+
+    const labels = [
+        "Левый верхний",
+        "Правый верхний",
+        "Левый нижний",
+        "Правый нижний",
+    ];
+
+    const renderSelect = (i) => (
+        <select
+            name={i}
+            value={selectedElements[i] || ""}
+            onChange={onChangeElements}
+            className="corner-select"
+        >
+            <option value="">— не задано —</option>
+            {myThankaList.map((t) => (
+                <option key={t.ID} value={t.ID}>
+                    {t.Name || t.ID}
+                </option>
+            ))}
+        </select>
+    );
 
     return (
         <>
             <table id="elements">
                 <tbody>
                     <tr>
-                        <td><input defaultValue={elemArr[0]} onChange={onChangeElements} name={0} /></td>
-                        <td><input defaultValue={elemArr[1]} onChange={onChangeElements} name={1} /></td>
-                        </tr>
-                        <tr>
-                        <td><input defaultValue={elemArr[2]} onChange={onChangeElements} name={2} /></td>
-                        <td><input defaultValue={elemArr[3]} onChange={onChangeElements} name={3} /></td>
+                        <td><label>{labels[0]}<br/>{renderSelect(0)}</label></td>
+                        <td><label>{labels[1]}<br/>{renderSelect(1)}</label></td>
+                    </tr>
+                    <tr>
+                        <td><label>{labels[2]}<br/>{renderSelect(2)}</label></td>
+                        <td><label>{labels[3]}<br/>{renderSelect(3)}</label></td>
                     </tr>
                 </tbody>
             </table>

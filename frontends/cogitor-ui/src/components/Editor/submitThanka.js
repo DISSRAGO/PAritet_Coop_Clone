@@ -114,14 +114,20 @@ export function submitThanka(ctx) {
     }
 
     dataToEditor.Angles = selectedAngles;
-    if (selectedElements.length < 4) {
-        let elements = selectedElements;
-        for (let i = 0; i < 4 - elements.length; i++) {
-            elements.push("");
-        }
-        setSelectedElements(elements)
+    // Углы — отдаём бэку массив объектов {ID:"…"} длины 4 в порядке
+    // LeftUp / RightUp / LeftBottom / RightBottom (см. _CORNER_CODES в
+    // local_adapter.py и Canvas.jsx). Бэк ставит SetElements идемпотентно:
+    // DELETE+INSERT по (parent, corner_code). Пустой ID → угол остаётся
+    // пустым (Canvas рисует пустой слот). При editor_type='edit' пустой
+    // массив сбрасывает все 4 угла.
+    const cornersPadded = [];
+    for (let i = 0; i < 4; i++) {
+        cornersPadded.push(selectedElements[i] || "");
     }
-    dataToEditor.Elements = selectedElements.join(';');
+    if (selectedElements.length < 4) {
+        setSelectedElements(cornersPadded);
+    }
+    dataToEditor.Elements = cornersPadded.map((id) => ({ ID: id || "" }));
     dataToEditor.Picture = selectedPictureSend;
     dataToEditor.PictureCoords = selectedPicCoord;
 
@@ -254,10 +260,19 @@ export function submitThanka(ctx) {
             for (const k of Object.keys(dataToEditor)) {
                 if (k === "Thanka" || k === "Object" || k === "Request") continue
                 if (k === "Picture" || k === "PictureCoords") continue
+                if (k === "Elements") continue // вручную ниже — это массив объектов
                 const v = dataToEditor[k]
                 if (v === undefined || v === null) continue
                 if (typeof v === "object") continue
                 fd.append(k, v)
+            }
+            // Elements в multipart ветке: бэк (routers/thanka.py) умеет
+            // legacy-формат через «;», отдаём строкой 4×UUID.
+            if (Array.isArray(dataToEditor.Elements)) {
+                const csv = dataToEditor.Elements
+                    .map((el) => (el && typeof el === "object" ? (el.ID || "") : (el || "")))
+                    .join(";")
+                fd.append("Elements", csv)
             }
             // PictureCoords развернём в PictureCoords_top/left/width/height
             if (selectedPicCoord && typeof selectedPicCoord === "object") {

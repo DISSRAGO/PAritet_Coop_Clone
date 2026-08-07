@@ -20,6 +20,7 @@ export const ROUTE_NAMES = {
   ADMIN: "/admin",
   BILLING: "/billing",
   SIGN_UP: "/sign-up",
-  ERROR: "/404"
+  ERROR: "/404",
+  RECLAMATIONS: "/admin/reclamations",
 }
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, MemoryRouter } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import MainLayout from "../layout/MainLayout/MainLayout";
 
 import { AuthContextProvider } from "../context/AuthContext";
@@ -10,6 +10,9 @@ import Viewer from "../pages/ViewerPage/ViewerPage.jsx";
 import StoryPage from "../pages/ThankaStory/ThankaStory.jsx";
 import CommentPage from "../pages/CommentPage/CommentPage.jsx";
 import AdminPage from "../pages/Admin/Admin.jsx";
+import ReclamationPanelPage from "../pages/ReclamationPanelPage";
+import SystemThankaPage from "../pages/SystemThankaPage";
+import ProfilePage from "../pages/ProfilePage/ProfilePage";
 
 const SignUpPage = React.lazy(() => import("../pages/SignUpPage"));
 const ConfirmSignUp = React.lazy(() => import('../pages/ConfirmSignUp'));
@@ -23,34 +26,42 @@ const AppRoutes: React.FC = () => {
             <AuthContextProvider>
                 <MainLayout>
                     <Routes>
-                        <Route path={ROUTE_NAMES.HOME_PAGE} element={
+                        <Route 
+                            path={ROUTE_NAMES.HOME_PAGE} 
+                            element={<SystemThankaPage />} 
+                        />
+                        <Route 
+                            path={ROUTE_NAMES.NAVIGATOR} 
+                            element={
                             <React.Suspense fallback={<div className="error">Загрузка...</div>}>
                                 <Viewer />
                             </React.Suspense>
-                        } />
-                        <Route path={ROUTE_NAMES.NAVIGATOR} element={
+                            } 
+                        />
+                        <Route 
+                            path={ROUTE_NAMES.EMPTY_NAVIGATOR} 
+                            element={
                             <React.Suspense fallback={<div className="error">Загрузка...</div>}>
                                 <Viewer />
                             </React.Suspense>
-                        } />
-                        <Route path={ROUTE_NAMES.EMPTY_NAVIGATOR} element={
-                            <React.Suspense fallback={<div className="error">Загрузка...</div>}>
-                                <Viewer />
-                            </React.Suspense>
-                        } />
+                            } 
+                        />
                         <Route
                             path={ROUTE_NAMES.PROFILE}
                             element={
                                 <React.Suspense fallback={<div className="error">Загрузка...</div>}>
-                                    <Viewer />
+                                    <ProfilePage />
                                 </React.Suspense>
                             }
                         />
-                         <Route path={ROUTE_NAMES.SITE_PAGE} element={
+                        <Route 
+                            path={ROUTE_NAMES.SITE_PAGE} 
+                            element={
                             <React.Suspense fallback={<div className="error">Загрузка...</div>}>
                                 <Viewer />
                             </React.Suspense>
-                        } />
+                            } 
+                        />
                         <Route
                             path={ROUTE_NAMES.STORY_PAGE}
                             element={
@@ -148,6 +159,10 @@ const AppRoutes: React.FC = () => {
                                     <Editor type={'add'} />
                                 </React.Suspense>
                             } />
+                        <Route
+                            path={ROUTE_NAMES.RECLAMATIONS}
+                            element={<ReclamationPanelPage />}
+                        />
                     </Routes>
                 </MainLayout>
             </AuthContextProvider>

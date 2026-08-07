@@ -159,15 +159,32 @@ export default function UserReducer(
 					error: null,
 				},
 			};
-		case UserActionsTypes.GET_HEADER_INFO_SUCCESS:
+		case UserActionsTypes.GET_HEADER_INFO_SUCCESS: {
+			const payload: any = action.payload || {};
+
 			return {
 				...state,
 				headerInfo: {
 					status: FetchStatus.SUCCESS,
-					data: action.payload,
+					data: {
+						...(payload?.data || payload || {}),
+						subjectId:
+							payload?.data?.subjectId ||
+							payload?.data?.subject_id ||
+							payload?.subjectId ||
+							payload?.subject_id ||
+							"",
+						subject_id:
+							payload?.data?.subject_id ||
+							payload?.data?.subjectId ||
+							payload?.subject_id ||
+							payload?.subjectId ||
+							"",
+					},
 					error: null,
 				},
 			};
+		}
 		case UserActionsTypes.GET_HEADER_INFO_FAILURE:
 			return {
 				...state,

@@ -39,7 +39,9 @@ export function CustomURL(props) {
         }
     }
 
-    function checkURL() {
+    function checkURL(e) {
+        e?.preventDefault?.()
+
         if (!sameAsDefault(customURL)) {
             axios({
                 method: "post",
@@ -56,12 +58,16 @@ export function CustomURL(props) {
                 if (result.data.result) {
                     setErrorText("Данный адрес уже занят")
                     showError(true)
+                    setCheckedURL(false)
                 } else {
                     setErrorText("Данный адрес можно использовать")
                     showError(true)
                     setCheckedURL(true)
                 }
             }).catch((error) => {
+                setErrorText("Ошибка проверки адреса, попробуйте ещё раз")
+                showError(true)
+                setCheckedURL(false)
             })
         } else {
             setErrorText("Текущий адрес")
@@ -75,8 +81,8 @@ export function CustomURL(props) {
         <p>Введите желаемый URL-адрес:</p>
         <input /*defaultValue={url}*/ onChange={onChangeUrl} value = {customURL}/>
         {error && <p>{errorText}</p>}
-        <button  onClick = {(e) => checkURL()} disabled = {error || customURL == ""}>Проверить</button>
-        <button onClick = {(e) => {setCustomURL(""); setErrorText(""); setCheckedURL(true)}}>Удалить</button>
+        <button type="button" onClick = {checkURL} disabled = {error || customURL == ""}>Проверить</button>
+        <button type="button" onClick = {(e) => {setCustomURL(""); setErrorText(""); showError(false); setCheckedURL(true)}}>Удалить</button>
         <p>Полный URL-адрес страницы будет выглядеть:<input readOnly value={type == 'avatar' ? SITE+'@'+customURL : SITE+customURL}/></p>
         </>
     )

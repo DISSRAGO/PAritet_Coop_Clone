@@ -52,6 +52,7 @@ import { SimpleThankaActionList } from '../Table/TableList.jsx';
 import { MenuProps } from 'antd';
 import { Menu, Breadcrumb, Modal} from 'antd';
 import TableSort from '../Table/TableSort.jsx';
+import ReclamationCreateModal from '../reclamation/ReclamationCreateModal';
 
 function SiteButtons(props) {
 
@@ -63,6 +64,8 @@ function SiteButtons(props) {
 
     const [systemMessageText, setSystemMessageText] = useState("");
     const [systemMessageType, setSystemMessageType] = useState("none");
+     // REKL: состояние открытия модалки рекламации
+    const [showRekl, setShowRekl] = useState(false)
 
     const removePage = (e) => {
         const confirmBox = window.confirm(
@@ -119,6 +122,26 @@ function SiteButtons(props) {
                 </>
             }
         </div>
+        {/* REKL: кнопка и модалка рекламации */}
+        {data.canShowReclamationButton && (
+            <>
+                <input
+                    type="button"
+                    value="⚑"
+                    title="Подать рекламацию"
+                    onClick={() => setShowRekl(true)}
+                />
+
+                <ReclamationCreateModal
+                    isOpen={showRekl}
+                    onClose={() => setShowRekl(false)}
+                    targetType="thanka"
+                    targetId={data.Id}
+                    subjectId={auth?.data?.id ?? ''}
+                    respondentSubjectId={data.Thanka?.Author}
+                />
+            </>
+        )}
         <SystemMessage messageText = {systemMessageText} setMessageText = {setSystemMessageText} Type = {systemMessageType} setStatus = {setSystemMessageType} />
         </>
     );
@@ -754,30 +777,40 @@ function SiteMenu(props) {
 };
 
 function cssParser(arr) {
-    for (let i = 0; i < arr.length; i++) {
-        let string = arr[i][1]
-        //if (string == "")
-        string = string.replace("http://","")
-        let mainstring = string.split(/\{|\}|\;|\:/)
-        let len = mainstring.length
-        mainstring[0] = "{"
-        mainstring[len-1] = "}"
-        for (let i = 1; i < len - 1; i++) {
-            mainstring[i] = "\""+mainstring[i]+"\""
+  for (let i = 0; i < arr.length; i++) {
+    let string = arr[i][1];
+    if (string) {
+      string = string.replace("http", "");
+      let mainstring = string.split("");
+      let len = mainstring.length;
+      mainstring[0] = "{";
+      mainstring[len - 1] = "}";
+      for (let i = 1; i < len - 1; i++) {
+        mainstring[i] = mainstring[i];
+      }
+      for (let i = 1; i < len - 2; i++) {
+        mainstring[i] = mainstring[i] + mainstring[i + 1];
+        if (i + 1 != len - 2) {
+          mainstring[i + 1] = ",";
+        } else {
+          mainstring[i + 1] = "";
         }
-        for (let i = 1; i < len - 2; i++) {
-            mainstring[i] = mainstring[i]+":"+mainstring[i+1]
-            if (i+1 != len - 2) {
-                mainstring[i+1] = ","
-            } else {
-                mainstring[i+1] = ""
-            }
-            i++
-        }
-        mainstring = mainstring.join("")
-        arr[i][1] = JSON.parse(mainstring)
+        i++;
+      }
+      mainstring = mainstring.join("");
+      try {
+        arr[i][1] = JSON.parse(mainstring);
+      } catch (e) {
+        console.warn(
+          "[cssParser] Невалидный JSON для селектора «" + arr[i][0] + "»:",
+          mainstring,
+          "— исходное значение:", string
+        );
+        arr[i][1] = {};
+      }
     }
-    return arr
+  }
+  return arr;
 }
 
 function getCSSProperty(array, property) {

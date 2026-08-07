@@ -3,6 +3,7 @@ import auth from "./authReducer";
 import payment from "./paymentReducer";
 import user from "./userReducer";
 import ThankaReducer from "./thankaReducer";
+import reclamation from "../reclamationSlice";
 
 export default {
 	address,
@@ -10,4 +11,5 @@ export default {
 	auth,
 	user,
 	ThankaReducer,
+	reclamation,
 };

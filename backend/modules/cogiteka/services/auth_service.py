@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import os
 import re
 from typing import Optional
 
 from fastapi import HTTPException, status
 
+from backend.modules.homonet.domains.subject.schemas import CreatePersonalSubjectRequest
+from backend.modules.homonet.domains.subject.service import SubjectService
 from backend.shared.db import get_conn
 from backend.shared.schemas.auth import (
     ConfirmRequest,
@@ -16,12 +19,10 @@ from backend.shared.schemas.auth import (
 )
 from backend.shared.security import hash_password, verify_password
 
-PHONE_CLEAN_RE = re.compile(r"[^\d+]")
 
-# passlib pbkdf2_sha256 hashes always start with this prefix.
-# Anything else stored in password_hash is treated as a legacy plain password
-# and is transparently rehashed on next successful login.
+PHONE_CLEAN_RE = re.compile(r"[^\d+]")
 _HASH_PREFIX = "$pbkdf2-sha256$"
+REQUIRE_EMAIL_VERIFICATION = os.getenv("HOMONET_REQUIRE_EMAIL_VERIFICATION", "0").strip() == "1"
 
 
 def _is_hashed(value: str | None) -> bool:
@@ -148,11 +149,32 @@ class AuthService:
         }
 
     async def signup_confirm(self, dto: ConfirmRequest) -> dict:
-        login = getattr(dto, "Login", None) or getattr(dto, "login", None)
+        login = (getattr(dto, "Login", None) or getattr(dto, "login", None) or "").strip()
         if not login:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Login is required",
+            )
+
+        auth_user = await self._fetch_one(
+            """
+            SELECT
+                user_id,
+                login,
+                person_id,
+                subject_id,
+                is_active,
+                is_verified
+            FROM homonet.auth_user
+            WHERE login = %s
+            """,
+            login,
+        )
+
+        if not auth_user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
             )
 
         async with get_conn() as conn:
@@ -167,7 +189,7 @@ class AuthService:
                     WHERE login = %s
                     RETURNING user_id, login
                     """,
-                    (login.strip(),),
+                    (login,),
                 )
                 row = await cur.fetchone()
 
@@ -176,6 +198,50 @@ class AuthService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found",
             )
+
+        fresh_user = await self._fetch_one(
+            """
+            SELECT
+                user_id,
+                login,
+                person_id,
+                subject_id
+            FROM homonet.auth_user
+            WHERE login = %s
+            """,
+            login,
+        )
+
+        if fresh_user and fresh_user["subject_id"] is None:
+            surname = (
+                getattr(dto, "Surname", None)
+                or getattr(dto, "surname", None)
+                or login
+            ).strip()
+            first_name = (
+                getattr(dto, "FirstName", None)
+                or getattr(dto, "firstName", None)
+                or login
+            ).strip()
+            second_name = (
+                getattr(dto, "SecondName", None)
+                or getattr(dto, "secondName", None)
+                or None
+            )
+
+            subject_service = SubjectService()
+            try:
+                await subject_service.create_personal_subject(
+                    CreatePersonalSubjectRequest(
+                        authUserLogin=login,
+                        surname=surname or login,
+                        firstName=first_name or login,
+                        secondName=second_name.strip() if isinstance(second_name, str) and second_name.strip() else None,
+                    )
+                )
+            except HTTPException as exc:
+                if exc.status_code != status.HTTP_409_CONFLICT:
+                    raise
 
         return {"message": f"Registration confirmed for {row['login']}"}
 
@@ -193,9 +259,10 @@ class AuthService:
                 login,
                 password_hash,
                 is_active,
-                is_verified
+                is_verified,
+                subject_id
             FROM homonet.auth_user
-            WHERE login = %s
+            WHERE LOWER(login) = LOWER(%s)
             """,
             login.strip(),
         )
@@ -212,11 +279,35 @@ class AuthService:
                 detail="User is inactive",
             )
 
-        if not row["is_verified"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Registration is not confirmed",
+        if REQUIRE_EMAIL_VERIFICATION:
+            subject_id = row.get("subject_id")
+            if not subject_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Email is not verified",
+                )
+
+            subject_row = await self._fetch_one(
+                """
+                SELECT
+                    email_verification_status::text AS email_verification_status
+                FROM homonet.subject
+                WHERE subject_id = %s
+                """,
+                subject_id,
             )
+
+            if not subject_row or subject_row["email_verification_status"] != "verified":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Email is not verified",
+                )
+        else:
+            if not row["is_verified"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Registration is not confirmed",
+                )
 
         stored = row["password_hash"] or ""
         password_ok = False
@@ -228,7 +319,6 @@ class AuthService:
             except Exception:
                 password_ok = False
         else:
-            # Legacy plain-text password support — accept once, then rehash.
             password_ok = stored == password
             needs_rehash = password_ok
 

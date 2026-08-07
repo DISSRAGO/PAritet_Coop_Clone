@@ -39,7 +39,7 @@ _conn: psycopg.Connection | None = None
 def _get_database_url() -> str:
     return os.getenv(
         "DATABASE_URL",
-        "postgresql://homonet_app_auth:CHANGE_ME_APP_STRONG@127.0.0.1:5432/homonet_v051_test",
+        "postgresql://homonet_app_auth:73prKjwu952@127.0.0.1:5432/homonet_v051_test",
     )
 
 
@@ -137,19 +137,23 @@ class LocalCogiAdapter:
     # --- handlers -------------------------------------------------------------
 
     def _h_get_thanka(self, params: dict) -> dict:
-        """
-        Возвращает данные тханки/кабинета.
-        Если параметром приходит cabinet-тханка пользователя — кладём в
-        MyThankaList все его тханки (это страница /profile).
-        """
-        thanka_id = str(params.get("Id") or "")
-        login = str(params.get("Login") or "")
 
+        thanka_id = str(params.get("Id") or params.get("id") or "").strip()
+        login = str(params.get("Login") or params.get("login") or "").strip()
+
+        address = str(
+            params.get("Address")
+            or params.get("address")
+            or ""
+        ).strip()
+
+        if not thanka_id and address:
+            parts = [p for p in address.split("/") if p]
+            if len(parts) >= 2 and parts[0] in {"navigator", "sitepage"}:
+                thanka_id = parts[1].strip()
         avatar_list = self._avatar_list_for(login=login)
         author_id = avatar_list[0]["ID"] if avatar_list else ""
 
-        # Резолвим subject_id зрителя — это ключ для определения владельца,
-        # устойчивый к дублям author-рядов. Один ход в auth_user.
         viewer_subject_id = ""
         if login:
             _vs = _q(
@@ -157,30 +161,37 @@ class LocalCogiAdapter:
                 (login,),
             )
             if _vs and _vs[0].get("sid"):
-                viewer_subject_id = _vs[0]["sid"]
+                viewer_subject_id = str(_vs[0]["sid"])
 
-        # thanka_id может приходить как UUID, так и custom_url (напр. WarhammerTheOldWorld).
-        # Канон PHP: ?StartThanka=WarhammerTheOldWorld — это читаемый URL.
-        # Сначала пробуем как UUID, потом ищем по cogobject.current_content->>'custom_url'.
+        # Fallback-резолвер subject_id по логину.
+        def _resolve_subject_id_by_login(user_login: str) -> str:
+            if not user_login:
+                return ""
+            rows = _q(
+                """
+                SELECT au.subject_id::text AS sid
+                FROM auth_user au
+                WHERE au.login = %s
+                LIMIT 1
+                """,
+                (user_login,),
+            )
+            if rows and rows[0].get("sid"):
+                return str(rows[0]["sid"])
+            return ""
+
         row = None
         if thanka_id:
-            # Пробуем UUID-соответствие только если значение похоже на UUID,
-            # иначе cast сломается в PostgreSQL.
             import re as _re
             uuid_pattern = _re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-            # author_subject_id тянем JOIN'ом author → subject. Это источник
-            # правды для определения владельца: у одного subject может быть
-            # несколько author-рядов (legacy + созданный через subject-путь
-            # в PR #23). Сравнение по author_id в такой ситуации давало false
-            # для тханок созданных одним из author'ов, видимых через другой
-            # (avatar ведёт на legacy author, а тханка от subject-author).
+            
             if uuid_pattern.match(thanka_id):
                 rows = _q(
                     """
                     SELECT t.thanka_id::text AS id,
-                           t.title           AS name,
-                           t.status          AS status,
-                           t.author_id::text AS author_id,
+                           t.title            AS name,
+                           t.status           AS status,
+                           t.author_id::text  AS author_id,
                            a.subject_id::text AS author_subject_id,
                            COALESCE(co.current_content, '{}'::jsonb) AS content
                     FROM thanka t
@@ -198,22 +209,23 @@ class LocalCogiAdapter:
                 rows = _q(
                     """
                     SELECT t.thanka_id::text AS id,
-                           t.title           AS name,
-                           t.status          AS status,
-                           t.author_id::text AS author_id,
+                           t.title            AS name,
+                           t.status           AS status,
+                           t.author_id::text  AS author_id,
                            a.subject_id::text AS author_subject_id,
                            COALESCE(co.current_content, '{}'::jsonb) AS content
                     FROM thanka t
                     LEFT JOIN author a ON a.author_id = t.author_id
                     LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
-                    WHERE co.current_content->>'custom_url' = %s
+                    WHERE co.current_content->>'legacy_id' = %s
+                        OR co.current_content->>'id' = %s
+                        OR t.title = %s
                     LIMIT 1
                     """,
-                    (thanka_id,),
+                    (thanka_id, thanka_id, thanka_id),
                 )
                 if rows:
                     row = rows[0]
-                    # Нормализуем thanka_id к UUID для дальнейшей логики ниже.
                     thanka_id = row["id"]
 
         content = (row["content"] if row else {}) or {}
@@ -228,10 +240,16 @@ class LocalCogiAdapter:
         obj_type = content.get("type") or ("avatar" if is_cabinet else "article")
         custom_url = content.get("custom_url") or ""
 
-        # Резолвим parent_id в ParentId / ParentName / ParentCustomUrl —
-        # это источник правды для клика в центр (Canvas.jsx ведёт на
-        # /navigator/<ParentCustomUrl> с fallback на <ParentId>).
-        # Для кабинетных тханок parent_id пуст — это корень дерева.
+        author_subject_id = ""
+        if row and row.get("author_subject_id"):
+            author_subject_id = str(row["author_subject_id"])
+
+        if not author_subject_id and login:
+            author_subject_id = _resolve_subject_id_by_login(login)
+
+        if not viewer_subject_id and author_subject_id and obj_type == "avatar":
+            viewer_subject_id = author_subject_id
+
         parent_id = "" if is_cabinet else str(content.get("parent_id") or "").strip()
         parent_name = ""
         parent_custom_url = ""
@@ -266,30 +284,15 @@ class LocalCogiAdapter:
             "ParentName": parent_name,
             "ParentCustomUrl": parent_custom_url,
             "Author": (row["author_id"] if row else author_id) or author_id,
+            "AuthorSubjectId": author_subject_id,
             "AuthorName": login,
             "CustomURL": custom_url,
         }
 
-        # PrivacyLevel определяет access во фронте:
-        #   >=3 — можно создавать тханки, 6 — владелец.
-        #
-        # Определяем владельца через subject_id (стабильный ключ cross-фронт
-        # экосистемы), а не через author_id. Причина: в базе могут существовать
-        # несколько author-рядов для одного subject (legacy со времён
-        # _ensure_author_for + новый из _ensure_author_by_subject в PR #23
-        # для legacy-author'ов без subject_id). Следствие бага было: новые
-        # тханки ссылались на subject-author, avatar-путь резолвил зрителя
-        # в legacy-author, сравнение разных author_id давало is_owner=False,
-        # и кнопка "Редактировать" исчезала у владельца.
-        #
-        # Fallback на author_id оставлен для легаси-данных, где у author
-        # вообще нет subject_id (NULL) — иначе ни одна старая тханка
-        # не определялась бы как своя до запуска backfill-скрипта.
         is_owner_by_subject = bool(
             viewer_subject_id
-            and row
-            and row.get("author_subject_id")
-            and str(row["author_subject_id"]) == str(viewer_subject_id)
+            and author_subject_id
+            and str(author_subject_id) == str(viewer_subject_id)
         )
         is_owner_by_author = bool(
             author_id
@@ -302,74 +305,73 @@ class LocalCogiAdapter:
 
         my_thanka_list: list[dict] = []
         children: list[dict] = []
+
         if is_cabinet or obj_type == "avatar":
-            # На кабинете показываем только корневые тханки (без parent_id),
+            # На кабинете показываем только корневые тханки владельца,
             # чтобы дочки не дублировались в круге кабинета и в кругах родителей.
             my_thanka_list = self._my_thanka_rows(login=login, only_roots=True)
             children = my_thanka_list
-        elif is_owner and row:
-            # Обычная тханка владельца — дочки это те тханки,
-            # у которых cogobject.current_content->>'parent_id' == эта тханка.
-            children = self._children_for(parent_thanka_id=row["id"])
-            # MyThankaList во вложенной тханке тоже полезен для привязки секторов.
-            my_thanka_list = self._my_thanka_rows(login=login, only_roots=False)
 
+        elif row:
+            children = self._children_for(parent_thanka_id=row["id"])
+
+            if is_owner:
+                my_thanka_list = self._my_thanka_rows(login=login, only_roots=False)
+
+        children_image = self._children_image_map(children)
         type_name_map = {
-            "avatar":     ("Аватар",       "аватар",     "аватара"),
-            "article":    ("Статья",       "статью",     "статьи"),
-            "site":       ("Страница сайта", "сайт",        "сайта"),
-            "catalog":    ("Каталог",       "каталог",   "каталога"),
-            "collection": ("Коллекция",    "коллекцию", "коллекции"),
-            "document":   ("Документ",     "документ",  "документа"),
-            "cabinet":    ("Кабинет",      "кабинет",  "кабинета"),
-            "request":    ("Сервис",       "сервис",    "сервиса"),
-            "link":       ("Ссылка",       "ссылку",     "ссылки"),
-            "repost":     ("Репост",       "репост",     "репоста"),
-            "product":    ("Товар",        "товар",      "товара"),
+            "avatar":     ("Аватар", "аватар", "аватара"),
+            "article":    ("Статья", "статью", "статьи"),
+            "site":       ("Страница сайта", "сайт", "сайта"),
+            "catalog":    ("Каталог", "каталог", "каталога"),
+            "collection": ("Коллекция", "коллекцию", "коллекции"),
+            "document":   ("Документ", "документ", "документа"),
+            "cabinet":    ("Кабинет", "кабинет", "кабинета"),
+            "request":    ("Сервис", "сервис", "сервиса"),
+            "link":       ("Ссылка", "ссылку", "ссылки"),
+            "repost":     ("Репост", "репост", "репоста"),
+            "product":    ("Товар", "товар", "товара"),
         }
         type_name, accus, genit = type_name_map.get(obj_type, ("Статья", "статью", "статьи"))
 
-        # Для ЛЮБОЙ тханки владельца выставляем круги:
-        # «Количество кругов» и «секторов» берём из content (выставляет владелец в редакторе).
-        # Дефолт: 1 круг, 12 секторов (не меньше чем дочек).
-        # Пустые сектора при PrivacyLevel=6 кликом ведут в /create.
-        if is_owner:
-            try:
-                circles_num = int(content.get("circles_num") or 0)
-            except (TypeError, ValueError):
-                circles_num = 0
-            try:
-                sectors_num = int(content.get("sectors_num") or 0)
-            except (TypeError, ValueError):
-                sectors_num = 0
-            thanka_obj["CirclesNum"] = circles_num or 1
-            thanka_obj["SectorsNum"] = max(sectors_num or 12, len(children))
-            thanka_obj["VisibleElements"] = int(content.get("visible_elements") or 0)
-            thanka_obj["DocumentPart"] = False
+        try:
+            circles_num = int(content.get("circles_num") or 0)
+        except (TypeError, ValueError):
+            circles_num = 0
 
-        # Для тханок типа 'site' фронт (ViewerPage.jsx) читает
-        # data.data.MainPage.ID и data.data.Hash, чтобы подтянуть
-        # CSS-стиль главной страницы. Если их нет — крашится в рендере.
+        try:
+            sectors_num = int(content.get("sectors_num") or 0)
+        except (TypeError, ValueError):
+            sectors_num = 0
+
+        try:
+            visible_elements = int(content.get("visible_elements") or 0)
+        except (TypeError, ValueError):
+            visible_elements = 0
+
+        thanka_obj["CirclesNum"] = circles_num or 1
+        thanka_obj["SectorsNum"] = max(sectors_num or 12, len(children))
+        thanka_obj["VisibleElements"] = visible_elements
+        thanka_obj["DocumentPart"] = False
+
         top_main_page: dict | bool = False
         top_hash = ""
         if obj_type == "site":
             top_main_page = {"ID": thanka_obj["Id"], "Url": ""}
             top_hash = str(content.get("hash") or "")
 
-        # PR P0: возвращаем все типовые поля, которые теперь сохраняет
-        # _build_content. Без этого edit-форма открывалась пустой, хотя
-        # в jsonb всё было — потому что Object в ответе содержал только
-        # 4 ключа и Request всегда был пустым шаблоном.
-        # Пропускаем только реально непустые поля — иначе CogObjEditor.jsx
-        # получит «строковые» undefined вместо фактических значений.
         object_payload: dict = {
             "Type": obj_type,
             "Description": content.get("description") or "",
             "Name": thanka_obj["Name"],
-            # Object.Filename читает CogObject.jsx для отрисовки
-            # iframe с PDF-файлом (DIRPATH+"/pdf/"+object.Filename).
             "Filename": content.get("filename") or "",
         }
+
+        if author_subject_id:
+            object_payload["AuthorSubjectId"] = author_subject_id
+        if obj_type == "avatar" and author_subject_id:
+            object_payload["SubjectId"] = author_subject_id
+
         # Cogi.Article
         if content.get("date_event") is not None:
             object_payload["DateEvent"] = content.get("date_event") or ""
@@ -377,6 +379,7 @@ class LocalCogiAdapter:
             object_payload["RealAuthor"] = content.get("real_author") or ""
         if content.get("url") is not None:
             object_payload["URL"] = content.get("url") or ""
+
         # Cogi.Avatar
         if content.get("birth_date") is not None:
             object_payload["BirthDate"] = content.get("birth_date") or ""
@@ -384,10 +387,10 @@ class LocalCogiAdapter:
             object_payload["TelephoneNumber"] = content.get("telephone_number") or ""
         if content.get("email") is not None:
             object_payload["Email"] = content.get("email") or ""
-        # Для avatar Object.Name перебиваем на хранимый avatar_name
-        # (выше лежит title тханки в thanka_obj["Name"]).
+
         if obj_type == "avatar" and content.get("avatar_name"):
             object_payload["Name"] = content.get("avatar_name") or thanka_obj["Name"]
+
         # product
         if content.get("product_id") is not None:
             object_payload["ProductId"] = content.get("product_id") or ""
@@ -400,9 +403,6 @@ class LocalCogiAdapter:
         if content.get("thanka_link"):
             thanka_obj["ThankaLink"] = content.get("thanka_link") or ""
 
-        # LocationEvent — всегда отдаём массив из 3 элементов формата
-        # [{Name:...}] (фронт ожидает этот формат, см. LocationEditor).
-        # Если в jsonb хранится массив строк — оборачиваем в {Name}.
         loc_stored = content.get("location_event")
         loc_out: list = [{"Name": ""}, {"Name": ""}, {"Name": ""}]
         if isinstance(loc_stored, list):
@@ -413,21 +413,18 @@ class LocalCogiAdapter:
                 else:
                     loc_out[i] = {"Name": str(item or "")}
 
-        # Request (Бот) — восстанавливаем из content['request'] поверх
-        # дефолтного шаблона (он гарантирует Fields, иначе RequestEditor
-        # крашится на .split(',')).
         request_payload = _default_request()
         req_stored = content.get("request") if isinstance(content.get("request"), dict) else None
         if req_stored:
             for src_key, dst_key in (
-                ("fields",        "Fields"),
-                ("picture",       "Picture"),
-                ("categories",    "Categories"),
-                ("sort_order",    "SortOrder"),
-                ("sort_field",    "SortField"),
-                ("start_date",    "StartDate"),
-                ("end_date",      "EndDate"),
-                ("query_name",    "QueryName"),
+                ("fields", "Fields"),
+                ("picture", "Picture"),
+                ("categories", "Categories"),
+                ("sort_order", "SortOrder"),
+                ("sort_field", "SortField"),
+                ("start_date", "StartDate"),
+                ("end_date", "EndDate"),
+                ("query_name", "QueryName"),
                 ("special_props", "SpecialProps"),
                 ("search_string", "SearchString"),
             ):
@@ -439,14 +436,12 @@ class LocalCogiAdapter:
             "CabinetId": 0,
             "IsAdmin": True,
             "PrivacyLevel": privacy_level,
+            "subjectId": author_subject_id or viewer_subject_id or "",
             "Thanka": thanka_obj,
             "Object": object_payload,
             "MainPage": top_main_page,
             "Hash": top_hash,
             "Removed": False,
-            # Роутер пропускает все коллекции через registered(), которая
-            # ждёт SOAP-формат {"RegisteredObject": [...]} и тихо
-            # выбрасывает всё остальное. Оборачиваем.
             "AvatarList": _reg(avatar_list),
             "Content": _reg([]),
             "Children": _reg(children),
@@ -456,22 +451,19 @@ class LocalCogiAdapter:
             "LinksTo": _reg([]),
             "LinksFrom": _reg([]),
             "LinksSectors": _reg([]),
-            # «Углы» (Elements): ровно 4 элемента LeftUp/RightUp/LeftBottom/RightBottom.
-            # Источник — homonet.thanka_link c link_type в 4 corner-кодах
-            # (сид по миграции 2026_06_10_corners_link_type.sql).
-            # Видимость углов контролируется Thanka.VisibleElements (выше).
             "Elements": _reg(self._corner_elements_for(row["id"]) if row else []),
             "LocationEvent": loc_out,
             "Notifications": _reg([]),
             "SiteList": _reg([]),
             "Style": "",
-            "ChildrenImage": {},
+            "ChildrenImage": children_image,
             "DocImage": {},
             "Request": request_payload,
             "TypeName": type_name,
             "Accusativus": accus,
             "Genitivus": genit,
         }
+
 
     def _h_get_site_page(self, params: dict) -> dict:
         site_id = str(params.get("SiteId") or params.get("Id") or "")
@@ -802,77 +794,108 @@ class LocalCogiAdapter:
         return {"result": taken, "Result": taken}
 
     def _h_get_cabinet_by_user(self, params: dict) -> dict:
-        """
-        Возвращает Id «кабинетной» тханки пользователя. Если её ещё нет —
-        создаёт. Эта тханка отображается как страница /profile с типом
-        Object.Type='avatar' и подгружает MyThankaList.
+        login = str(params.get("Login") or "").strip()
+        subject_id = str(params.get("SubjectId") or "").strip()
 
-        Stage 3 PR 4: SubjectId имеет приоритет над login. Для login (создания
-        нового кабинета) — всё равно нужен отображаемый title, поэтому при
-        SubjectId-ветке берём display_name из subject (или строку 'cabinet' как
-        последний fallback).
-        """
-        login = str(params.get("Login") or "")
-        subject_id_param = str(params.get("SubjectId") or "").strip()
-
-        if not login and not subject_id_param:
+        if not login and not subject_id:
             return {"Id": ""}
 
-        # PR #41: валидируем что SubjectId принадлежит login’у.
+        # 0. Канонический путь: сначала ищем именно cabinet-thanka по current_content.is_cabinet
+        thanka_id = ""
+        if subject_id:
+            thanka_id = self._cabinet_id_by_subject(subject_id=subject_id)
+        if not thanka_id and login:
+            thanka_id = self._cabinet_id_for(login=login)
+        if thanka_id:
+            return {"Id": thanka_id}
+
+        # 1. Legacy-fallback
+        cabinet_rows: list[dict] = []
+
+        if subject_id:
+            cabinet_rows = _q(
+                """
+                SELECT t.thanka_id::text AS id
+                FROM thanka t
+                JOIN author a ON a.author_id = t.author_id
+                LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+                WHERE a.subject_id::text = %s
+                AND t.status <> 'deleted'
+                AND COALESCE((co.current_content->>'is_cabinet')::boolean, false) IS TRUE
+                ORDER BY t.created_at
+                LIMIT 1
+                """,
+                (subject_id,),
+            )
+
+        if not cabinet_rows and login:
+            cabinet_rows = _q(
+                """
+                SELECT t.thanka_id::text AS id
+                FROM thanka t
+                JOIN author a ON a.author_id = t.author_id
+                JOIN avatar av ON av.author_id = a.author_id
+                LEFT JOIN cogobject co ON co.thanka_id = t.thanka_id
+                WHERE av.login = %s
+                AND t.status <> 'deleted'
+                AND COALESCE((co.current_content->>'is_cabinet')::boolean, false) IS TRUE
+                ORDER BY t.created_at
+                LIMIT 1
+                """,
+                (login,),
+            )
+
+        if cabinet_rows:
+            thanka_id = str(cabinet_rows[0].get("id") or "").strip()
+            if thanka_id:
+                return {"Id": thanka_id}
+
+        # 2. Lazy-bootstrap
         verified_subject_id = self._resolve_owner_subject_id(
-            subject_id_param=subject_id_param,
+            subject_id_param=subject_id,
             user_login=login,
         )
+
         if verified_subject_id:
             author_id = self._ensure_author_by_subject(subject_id=verified_subject_id)
         else:
             author_id = self._ensure_author_for(login=login)
+
         if not author_id:
             return {"Id": ""}
 
+        display_name = login or "Личный кабинет"
+
         rows = _q(
             """
-            SELECT t.thanka_id::text AS id
-            FROM thanka t
-            JOIN cogobject co ON co.thanka_id = t.thanka_id
-            WHERE t.author_id::text = %s
-              AND (co.current_content->>'is_cabinet')::boolean IS TRUE
-            ORDER BY t.created_at ASC
-            LIMIT 1
-            """,
-            (author_id,),
-        )
-        if rows:
-            return {"Id": rows[0]["id"]}
-
-        # создаём кабинет-тханку
-        # title: login (легаси) либо display_name subject'а при SubjectId-ветке.
-        cabinet_title = login
-        if not cabinet_title and subject_id_param:
-            sub_rows = _q(
-                "SELECT display_name FROM homonet.subject WHERE subject_id::text = %s",
-                (subject_id_param,),
-            )
-            cabinet_title = (sub_rows[0]["display_name"] if sub_rows else "") or "cabinet"
-        ins = _q(
-            """
-            INSERT INTO thanka (title, author_id, status)
-            VALUES (%s, %s, 'active')
+            INSERT INTO thanka (title, author_id, status, is_system)
+            VALUES (%s, %s, 'active', false)
             RETURNING thanka_id::text AS id
             """,
-            (cabinet_title, author_id),
+            (display_name, author_id),
         )
-        if not ins:
+        if not rows:
             return {"Id": ""}
-        cab_id = ins[0]["id"]
-        cab_content = {
-            "title": cabinet_title,
-            "description": "",
+
+        thanka_id = str(rows[0]["id"])
+
+        content = {
+            "title": display_name,
             "type": "avatar",
-            "is_cabinet": True,
             "privacy": 1,
             "custom_url": "",
+            "annotation": "",
+            "description": "",
+            "is_cabinet": True,
+            "avatar_name": display_name,
+            "circles_num": 1,
+            "sectors_num": 12,
+            "visible_elements": 0,
         }
+
+        if verified_subject_id:
+            content["author_subject_id"] = verified_subject_id
+
         _q(
             """
             INSERT INTO cogobject (thanka_id, current_content)
@@ -881,9 +904,10 @@ class LocalCogiAdapter:
                 SET current_content = EXCLUDED.current_content,
                     updated_at = now()
             """,
-            (cab_id, _json_dumps(cab_content)),
+            (thanka_id, _json_dumps(content)),
         )
-        return {"Id": cab_id}
+
+        return {"Id": thanka_id}
 
     def _h_get_id_by_custom_url(self, params: dict) -> dict:
         """
@@ -1229,6 +1253,22 @@ class LocalCogiAdapter:
         )
         return rows
 
+    def _children_image_map(self, children: list[dict]) -> dict:
+        """
+        Возвращает SOAP-совместимую карту ChildrenImage:
+        индекс_ребёнка -> 1/0, где 1 означает «для сектора есть картинка».
+
+        Фронт Canvas использует этот объект, чтобы решить — рисовать
+        image{ID}.jpg или показывать заглушку "изображение недоступно".
+        """
+        out: dict[str, int] = {}
+        for idx, child in enumerate(children or []):
+            image_val = child.get("Image", 0) if isinstance(child, dict) else 0
+            try:
+                out[str(idx)] = 1 if int(image_val) else 0
+            except (TypeError, ValueError):
+                out[str(idx)] = 0
+        return out
     # --- corners (Elements) ---------------------------------------------------
 
     # Канонический порядок углов (Область SOC, Cogi; PERVYI-RELIZ §«углы»):

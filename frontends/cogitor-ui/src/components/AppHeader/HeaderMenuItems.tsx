@@ -1,136 +1,224 @@
 import {
-	LogoutOutlined,
-	HomeOutlined,
-	WalletOutlined,
-	UserOutlined,
-	EyeOutlined,
-	CommentOutlined,
-	ToolOutlined,
+  LogoutOutlined,
+  HomeOutlined,
+  WalletOutlined,
+  UserOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
-import {Avatar, Menu} from "antd";
-import React, {FC, useContext, useEffect} from "react";
-import {NavLink, Link, useLocation} from "react-router-dom";
+import { Avatar, Menu, Badge } from "antd";
+import React, { FC, useContext, useEffect, useMemo } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { useMediaQuery } from "react-responsive";
 
-import {AuthContext} from "../../context/AuthContext";
-import {useActions} from "../../hooks/useActions";
-import {useTypedSelector} from "../../hooks/useTypedSelector";
-import {ROUTE_NAMES} from "../../routes/AppRoutesSettings";
-import {FetchStatus} from "../../store/types/fetchTypes";
+import { AuthContext } from "../../context/AuthContext";
+import { useActions } from "../../hooks/useActions";
+import { useTypedSelector } from "../../hooks/useTypedSelector";
+import { ROUTE_NAMES } from "../../routes/AppRoutesSettings";
 import {
-	convertBinaryStringToFile,
-	DEFAULT_AVATAR_URL,
+  convertBinaryStringToFile,
+  DEFAULT_AVATAR_URL,
 } from "../../utils/avatar";
-import {getAccessToken} from "../../utils/checkAuth";
-import { urlManager } from "../../utils/urlManager";
+import { getAccessToken } from "../../utils/checkAuth";
+import { loadDashboard, loadInbox } from "../../store/reclamationSlice";
+import { useDispatch } from "react-redux";
+
+const resolveCurrentSubjectId = (state: any): string => {
+  const fromHeader =
+    state?.user?.headerInfo?.data?.subjectId ||
+    state?.user?.headerInfo?.data?.subject_id ||
+    state?.user?.headerInfo?.subjectId ||
+    state?.user?.headerInfo?.subject_id;
+
+  if (fromHeader) return String(fromHeader);
+
+  const fromAuth =
+    state?.auth?.user?.subjectId ||
+    state?.auth?.user?.subject_id ||
+    state?.auth?.user?.subject?.subjectId ||
+    state?.auth?.user?.subject?.subject_id;
+
+  if (fromAuth) return String(fromAuth);
+
+  const fromProfile =
+    state?.user?.profile?.subjectId || state?.user?.profile?.subject_id;
+
+  if (fromProfile) return String(fromProfile);
+  console.log("resolveCurrentSubjectId state.user.headerInfo =", state?.user?.headerInfo);
+  console.log("resolved subjectId =", fromHeader || fromAuth || fromProfile || "");
+  return "";
+};
 
 const HeaderMenuItems: FC = () => {
-	const {isAuth} = useContext(AuthContext);
-	const headerInfo = useTypedSelector((state) => state.user.headerInfo);
-	const logoutRequestStatus = useTypedSelector(
-		(state) => state.auth.logoutRequestStatus,
-	);
-	const {logout, getHeaderInformation} = useActions();
+  const { isAuth } = useContext(AuthContext);
+  const headerInfo = useTypedSelector((state: any) => state.user.headerInfo);
+  const reclamationState = useTypedSelector(
+    (state: any) => state.reclamation || {}
+  );
+  const subjectId = useTypedSelector((state: any) =>
+    resolveCurrentSubjectId(state)
+  );
+  const authUser = useTypedSelector((state: any) => state.auth?.user || null);
 
-	useEffect(() => {
-		if (getAccessToken()) {
-			getHeaderInformation();
-		}
-	}, []);
-	useEffect(() => {
-		if (logoutRequestStatus.status == FetchStatus.SUCCESS) {
-			localStorage.removeItem("accessToken");
-			localStorage.removeItem("refreshToken");
-			window.location.reload();
-		}
-	}, [logoutRequestStatus]);
-	function getAvatar() {
-		if (headerInfo?.data?.photoImage?.binaryContents) {
-			return convertBinaryStringToFile(
-				headerInfo?.data?.photoImage?.binaryContents ?? '',
-				headerInfo?.data?.photoImage?.contentType ?? '',
-			);
-		}
-		return DEFAULT_AVATAR_URL;
-	}
-	const handleLogout = () => {
-		logout();
-	};
+  const actions = useActions();
+  const dispatch = useDispatch() as any;
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isTabletOrMobile = useMediaQuery({ query: "(max-width: 767px)" });
 
-	let location = useLocation()
+  useEffect(() => {
+    if (getAccessToken()) {
+      actions.getHeaderInformation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-	const authMenu = [
-		{
-			key: "icon",
-			expandIcon: <Avatar src={getAvatar()} />,
-			children: [
-				{
-					key: "profile",
-					icon: <UserOutlined />,
-					label: <a href={ROUTE_NAMES.PROFILE}>Профиль</a>
-				},
-				{
-					key: "billing",
-					icon: <WalletOutlined />,
-					label: <a href={ROUTE_NAMES.BILLING}>Кошелёк</a>
-				},
-				{
-					key: "story",
-					icon: <EyeOutlined />,
-					label: <a href={ROUTE_NAMES.STORY_PAGE}>Список просмотренных тханок</a>
-				},
-				{
-					key: "announcements",
-					icon: <HomeOutlined />,
-					label: <a href={ROUTE_NAMES.HOME_PAGE}>На главную страницу</a>
-				},
-				{
-					key: "comments",
-					icon: <CommentOutlined />,
-					label: <a href={ROUTE_NAMES.COMMENTS_PAGE}>Мои комментарии</a>
-				},
-				((sessionStorage.getItem("admin") === "1") &&
-					{
-						key: "admin",
-						icon: <ToolOutlined />,
-						label: <a href={ROUTE_NAMES.ADMIN}>Портал администратора</a>
-					}
-				),
-				{
-					key: "logout",
-					icon: <LogoutOutlined />,
-					label: <a>Выйти</a>,
-					onClick: () => handleLogout()
-				}
-			]
-		}	
-	]
+  useEffect(() => {
+    if (!isAuth || !subjectId) return;
 
-	const isTinyScreen = useMediaQuery({query : '(max-width: 640px)'});
+    dispatch(loadDashboard(subjectId));
+    dispatch(loadInbox(subjectId));
+  }, [dispatch, isAuth, subjectId]);
 
-	return (
-		<>
-		<div className="navLinks">
-			{ isAuth && !isTinyScreen &&  
-				<a href = {ROUTE_NAMES.PROFILE}>Профиль</a> 
-			}
-			{ !isAuth && 
-				<a href={ROUTE_NAMES.SIGN_IN_PAGE}>Войти</a>
-			}
-			{ !isAuth && urlManager(location.pathname) &&
-				<a href={ROUTE_NAMES.SIGN_UP}>Регистрация</a>
-			}
-			{ !isTinyScreen && 
-				<a href = {ROUTE_NAMES.HOME_PAGE}>Главная</a>
-			}
-		</div>
-		{isAuth && 
-			<Menu theme="light" mode="vertical" items={authMenu} />
-		}
-		
-	</>
-	);
+  const getAvatar = (): string => {
+    if (headerInfo?.data?.photoImage?.binaryContents) {
+      return convertBinaryStringToFile(
+        headerInfo?.data?.photoImage?.binaryContents ?? "",
+        headerInfo?.data?.photoImage?.contentType ?? ""
+      );
+    }
+
+    return DEFAULT_AVATAR_URL;
+  };
+
+  const handleLogout = () => {
+    try {
+      actions.logout();
+    } catch {
+      // серверный logout не должен блокировать локальный выход
+    }
+
+    try {
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+    } catch {
+      // ignore
+    }
+
+    navigate(ROUTE_NAMES.SIGN_IN_PAGE, { replace: true });
+    window.location.reload();
+  };
+
+  const headerLogin =
+    headerInfo?.data?.login ||
+    headerInfo?.data?.Login ||
+    headerInfo?.data?.userLogin ||
+    headerInfo?.data?.user_login;
+
+  const authLogin =
+    (authUser &&
+      (authUser.login ||
+        authUser.Login ||
+        authUser.userName ||
+        authUser.UserName)) ||
+    "";
+
+  const effectiveLogin = String(headerLogin || authLogin || "").trim();
+  const isAdmin = effectiveLogin.toLowerCase() === "admin";
+
+  const handleProfileClick = () => {
+    if (isAdmin) {
+      navigate(ROUTE_NAMES.PROFILE);
+    } else {
+      navigate(ROUTE_NAMES.EMPTY_NAVIGATOR);
+    }
+  };
+
+  const selectedKeys: string[] = [];
+
+  if (location.pathname === ROUTE_NAMES.PROFILE) selectedKeys.push("profile");
+  if (location.pathname.startsWith(ROUTE_NAMES.EMPTY_NAVIGATOR)) {
+    selectedKeys.push("profile");
+  }
+  if (location.pathname === ROUTE_NAMES.HOME_PAGE) selectedKeys.push("home");
+  if (location.pathname === ROUTE_NAMES.BILLING) selectedKeys.push("billing");
+  if (location.pathname === ROUTE_NAMES.RECLAMATIONS) {
+    selectedKeys.push("reclamations");
+  }
+
+  const reclamationsUnreadCount = useMemo(() => {
+    const inbox = Array.isArray(reclamationState?.inbox)
+      ? reclamationState.inbox
+      : [];
+    return inbox.filter((item: any) => !!item?.hasUnread).length;
+  }, [reclamationState?.inbox]);
+
+  const reclamationsLabel = (
+    <Badge
+      count={reclamationsUnreadCount}
+      size="small"
+      offset={[6, -2]}
+      color="#ff4d4f"
+    >
+      <span>Рекламации</span>
+    </Badge>
+  );
+
+  const authItems = [
+    {
+      key: "profile",
+      icon: <Avatar size={30} src={getAvatar()} />,
+      label: <span onClick={handleProfileClick}>Профиль</span>,
+    },
+    {
+      key: "home",
+      icon: <HomeOutlined />,
+      label: <NavLink to={ROUTE_NAMES.HOME_PAGE}>Главная</NavLink>,
+    },
+    {
+      key: "reclamations",
+      icon: <ToolOutlined />,
+      label: (
+        <NavLink to={ROUTE_NAMES.RECLAMATIONS}>{reclamationsLabel}</NavLink>
+      ),
+    },
+    {
+      key: "billing",
+      icon: <WalletOutlined />,
+      label: <NavLink to={ROUTE_NAMES.BILLING}>Биллинг</NavLink>,
+    },
+    {
+      key: "logout",
+      icon: <LogoutOutlined />,
+      label: <span onClick={handleLogout}>Выход</span>,
+    },
+  ];
+
+  const guestItems = [
+    {
+      key: "home",
+      icon: <HomeOutlined />,
+      label: <NavLink to={ROUTE_NAMES.HOME_PAGE}>Главная</NavLink>,
+    },
+    {
+      key: "login",
+      icon: <UserOutlined />,
+      label: <NavLink to={ROUTE_NAMES.SIGN_IN_PAGE}>Вход</NavLink>,
+    },
+    {
+      key: "register",
+      icon: <UserOutlined />,
+      label: <NavLink to={ROUTE_NAMES.SIGN_UP}>Регистрация</NavLink>,
+    },
+  ];
+
+  const items = isAuth ? authItems : guestItems;
+
+  if (isTabletOrMobile) {
+    return <Menu mode="inline" selectedKeys={selectedKeys} items={items} />;
+  }
+
+  return <Menu mode="horizontal" selectedKeys={selectedKeys} items={items} />;
 };
 
 export default HeaderMenuItems;

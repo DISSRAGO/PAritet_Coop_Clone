@@ -34,3 +34,10 @@ logs/
 
 # Docker
 docker/data/
+# Локальные runtime- и аварийные файлы
+backend/.uvicorn.pid
+frontends/cogitor-ui/.npm.pid
+frontends/cogitor-ui/.package-lock.sha256
+backend/modules/homonet/domains/subject/service.broken.py
+code-snippet-homonet-subject.txt
+parent_id

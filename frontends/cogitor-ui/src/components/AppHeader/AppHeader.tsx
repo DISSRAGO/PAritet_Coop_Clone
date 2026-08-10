@@ -1,84 +1,69 @@
-import {MenuOutlined} from "@ant-design/icons";
-import {Drawer, Layout, Menu, Row} from "antd";
-import React, {FC} from "react";
+// /src/components/AppHeader/AppHeader.tsx
+import { MenuOutlined } from "@ant-design/icons";
+import { Drawer, Layout, Row } from "antd";
+import React, { FC, useState } from "react";
+import { Link } from "react-router-dom";
+import { useMediaQuery } from "react-responsive";
 
 import HeaderMenuItems from "./HeaderMenuItems";
-import {SITE,PATH} from "../../utils/url"
-import { urlManager } from "../../utils/urlManager";
-
-import { useEffect, useState } from "react";
-import axios from "axios";
-
-import { useLocation } from "react-router-dom";
 
 const AppHeader: FC = () => {
-	const isMobile = false;
-	const [menuDrawerVisible, setMenuDrawerVisible] = useState(false);
-	const showDrawer = () => {
-		setMenuDrawerVisible(true);
-	};
-	const onClose = () => {
-		setMenuDrawerVisible(false);
-	};
+    // Реальный детект мобилки по ширине экрана
+    const isMobile = useMediaQuery({ query: "(max-width: 767px)" });
+    const [menuDrawerVisible, setMenuDrawerVisible] = useState(false);
 
-	let location = useLocation()
+    const showDrawer = () => {
+        setMenuDrawerVisible(true);
+    };
 
-	const [siteName, setSiteName] = useState('КОГИТЕКА')
-	const [url, setUrl] = useState(SITE)
+    const onClose = () => {
+        setMenuDrawerVisible(false);
+    };
 
-	useEffect(() => {
-		if (!(urlManager(location.pathname) || location.pathname == "")) {
-			let address = location.pathname.split('/')
-			axios({
-				method: "post",
-				url: PATH + "site/site.php",
-				//данные отправятся в $_POST и $_FILES, а то мы не вытащим оттуда картинку
-				headers: { "content-type": "multipart/form-data" },
-				data: {method: "getMain", Id: address[address.length-1]},
-			}).then((result) => {
-				setUrl(result.data.Main.Url != "" ? SITE+result.data.Main.Url : SITE+'sitepage/'+result.data.Main.ID)
-				setSiteName(result.data.Main.Name)
-			}).catch((error) => {
-				
-			})
-		}
-	},[])
+    return (
+      <Layout.Header
+          className="app-header"
+          style={{
+              padding: "0 24px",
+              background: "#ffffff",
+              borderBottom: "1px solid #f0f0f0",
+          }}
+      >
+          <Row justify="space-between" align="middle" wrap={false}>
+              <Row align="middle" wrap={false}>
+                  <Link
+                      to="/"
+                      className="app-header__logo"
+                      style={{ fontWeight: 600, fontSize: 18, color: "#1890ff" }}
+                  >
+                      КОГИТЕКА
+                  </Link>
+              </Row>
 
-	return (
-		<>
-			<Layout.Header
-				style={{
-					background: "white",
-				}}
-			>
-				{isMobile ? (
-					<Menu theme="light" mode="horizontal">
-						<Menu.Item
-							key="menu"
-							onClick={showDrawer}
-							icon={<MenuOutlined />}
-						/>
-					</Menu>
-				) : (
-					<Row justify="end">
-						<HeaderMenuItems />
-					</Row>
-				)}
-			</Layout.Header>
-			{<a className="bigLink" href = {url}>{siteName}</a>}
-			<Drawer
-				key="menu"
-				placement="right"
-				closable={false}
-				onClose={onClose}
-				open={menuDrawerVisible}
-			>
-				<Menu theme="light" mode="vertical" style={{width: "100%"}}>
-					<HeaderMenuItems />
-				</Menu>
-			</Drawer>
-		</>
-	);
+              {isMobile ? (
+                  <>
+                      <MenuOutlined
+                          className="app-header__menu-icon"
+                          style={{ fontSize: 20, cursor: "pointer", color: "#000" }}
+                          onClick={showDrawer}
+                      />
+                      <Drawer
+                          title="Меню"
+                          placement="right"
+                          closable
+                          onClose={onClose}
+                          open={menuDrawerVisible}
+                          bodyStyle={{ padding: 0 }}
+                      >
+                          <HeaderMenuItems />
+                      </Drawer>
+                  </>
+              ) : (
+                  <HeaderMenuItems />
+              )}
+          </Row>
+      </Layout.Header>
+  );
 };
 
 export default AppHeader;

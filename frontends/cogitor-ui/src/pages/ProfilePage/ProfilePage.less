@@ -1,96 +1,96 @@
 @import "../../themes/index.less";
-.main {
-  width: 100%;
-  height: 100%;
+
+/**
+ * Контейнер страницы профиля
+ */
+.profile-page {
+  min-height: 100%;
+  padding: 16px 24px 24px;
   background-color: @body-background;
-  display: flex;
-  padding-top: 16px;
-  padding-bottom: 16px;
-  overflow: auto;
-  .leftmenu {
-    width: 224px;
-    border-right: @border-width-base @border-style-base @border-color-split;
-    :global {
-      .ant-menu-inline {
-        border: none;
-      }
-      .ant-menu:not(.ant-menu-horizontal) .ant-menu-item-selected {
-        font-weight: bold;
-      }
-    }
-  }
-  .right {
-    flex: 1;
-    padding-left: 40px;
-    padding-right: 40px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-    .title {
-      font-size: 20px;
-      color: @heading-color;
-      line-height: 28px;
-      font-weight: 500;
-      margin-bottom: 12px;
-    }
-  }
-  :global {
-    .ant-list-split .ant-list-item:last-child {
-      border-bottom: 1px solid #e8e8e8;
-    }
-    .ant-list-item {
-      padding-top: 14px;
-      padding-bottom: 14px;
-    }
+
+  .profile-page-content {
+    margin-top: 24px;
   }
 }
+
+/**
+ * Меню вкладок профиля: Профиль / Адрес / Уведомления / Поручительство
+ * Стилизуем только его, не трогая верхнюю глобальную навигацию.
+ */
 :global {
-  .ant-list-item-meta {
-    // 账号绑定图标
-    .taobao {
-      color: #ff4000;
-      display: block;
-      font-size: 48px;
-      line-height: 48px;
-      border-radius: @border-radius-base;
-    }
-    .dingding {
-      background-color: #2eabff;
-      color: #fff;
-      font-size: 32px;
-      line-height: 32px;
-      padding: 6px;
-      margin: 2px;
-      border-radius: @border-radius-base;
-    }
-    .alipay {
-      color: #2eabff;
-      font-size: 48px;
-      line-height: 48px;
-      border-radius: @border-radius-base;
-    }
+  .profile-tabs-menu.ant-menu-horizontal {
+    border-bottom: @border-width-base @border-style-base @border-color-split;
+    display: flex;
+    flex-wrap: wrap;
+    row-gap: 4px;
+    column-gap: 8px;
+    padding: 0;
   }
 
-  // 密码强度
-  font.strong {
-    color: @success-color;
+  .profile-tabs-menu.ant-menu-horizontal > .ant-menu-item {
+    padding: 0 16px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
   }
-  font.medium {
-    color: @warning-color;
+
+  .profile-tabs-menu.ant-menu-horizontal > .ant-menu-item-selected {
+    font-weight: 500;
   }
-  font.weak {
-    color: @error-color;
+
+  .profile-tabs-menu.ant-menu-horizontal > .ant-menu-item::after {
+    // подчёркивание делаем чуть короче, чтобы на переносе выглядело аккуратно
+    left: 12px;
+    right: 12px;
   }
 }
 
-@media screen and (max-width: @screen-md) {
-  .main {
-    flex-direction: column;
-    .leftmenu {
-      width: 100%;
-      border: none;
+/**
+ * Средние и узкие экраны: меню не жмётся в одну узкую строку,
+ * а аккуратно раскладывается в две колонки.
+ */
+@media screen and (max-width: 1024px) {
+  :global {
+    .profile-tabs-menu.ant-menu-horizontal {
+      row-gap: 4px;
+      column-gap: 4px;
     }
-    .right {
-      padding: 40px;
+
+    .profile-tabs-menu.ant-menu-horizontal > .ant-menu-item {
+      flex: 1 1 50%;
+      justify-content: center;
+      text-align: center;
+      font-size: 13px;
+      line-height: 36px;
+      height: 36px;
+      padding: 0 8px;
+    }
+
+    .profile-tabs-menu.ant-menu-horizontal > .ant-menu-item::after {
+      left: 16px;
+      right: 16px;
+    }
+  }
+}
+
+/**
+ * Совсем узкие экраны: вкладки становятся вертикальным списком,
+ * но выглядят как нормальные табы, без «убожества».
+ */
+@media screen and (max-width: @screen-sm) {
+  :global {
+    .profile-tabs-menu.ant-menu-horizontal {
+      column-gap: 0;
+    }
+
+    .profile-tabs-menu.ant-menu-horizontal > .ant-menu-item {
+      flex: 1 1 100%;
+      justify-content: flex-start;
+      text-align: left;
+      padding: 0 12px;
     }
   }
 }

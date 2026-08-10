@@ -1,13 +1,14 @@
 import {LockOutlined, UserOutlined} from "@ant-design/icons";
 import {Button, Form, Input} from "antd";
 import React, {FC, useEffect, useState} from "react";
-import history from "history";
 
 import {useActions} from "../../../hooks/useActions";
 import {useTypedSelector} from "../../../hooks/useTypedSelector";
 import {FetchStatus} from "../../../store/types/fetchTypes";
 import {rules} from "../../../utils/rules";
-import {useNavigate} from "react-router-dom";
+import {useNavigate, NavLink} from "react-router-dom";
+import { ROUTE_NAMES } from "../../../routes/AppRoutesSettings";
+
 
 const LoginForm: FC = () => {
 	const signInRequestStatus = useTypedSelector(
@@ -81,6 +82,9 @@ const LoginForm: FC = () => {
 				>
 					Войти
 				</Button>
+				<div style={{ marginTop: 16, textAlign: "center" }}>
+					Нет аккаунта? <NavLink to={ROUTE_NAMES.SIGN_UP}>Зарегистрироваться</NavLink>
+				</div>
 			</Form.Item>
 		</Form>
 	);

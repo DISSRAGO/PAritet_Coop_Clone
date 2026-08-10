@@ -39,7 +39,7 @@ const devServer: DevServerConfiguration = {
   allowedHosts: [
     "localhost",
     "127.0.0.1",
-    ".paritet.club",  // ведущая точка = все сабдомены
+    ".paritet.club", // ведущая точка = все сабдомены
     ...((process.env.WDS_ALLOWED_HOSTS || "")
       .split(",")
       .map(s => s.trim())
@@ -213,12 +213,20 @@ const config: Configuration = {
           filename: "assets/fonts/[name].[hash][ext]",
         },
       },
+
       {
         test: /\.less$/i,
         use: [
           "style-loader",
           "css-loader",
-          "less-loader",
+          {
+            loader: "less-loader",
+            options: {
+              lessOptions: {
+                javascriptEnabled: true,
+              },
+            },
+          },
         ],
       },
     ],

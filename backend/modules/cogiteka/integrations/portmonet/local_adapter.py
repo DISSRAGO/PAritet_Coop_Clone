@@ -37,10 +37,10 @@ _conn: psycopg.Connection | None = None
 
 
 def _get_database_url() -> str:
-    return os.getenv(
-        "DATABASE_URL",
-        "postgresql://homonet_app_auth:REMOVED@127.0.0.1:5432/homonet_v051_test",
-    )
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        raise RuntimeError("DATABASE_URL must be set")
+    return database_url
 
 
 def _get_conn() -> psycopg.Connection:
@@ -184,7 +184,7 @@ class LocalCogiAdapter:
         if thanka_id:
             import re as _re
             uuid_pattern = _re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-            
+
             if uuid_pattern.match(thanka_id):
                 rows = _q(
                     """

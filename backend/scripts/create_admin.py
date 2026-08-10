@@ -9,13 +9,13 @@
 from __future__ import annotations
 
 import asyncio
-
+import os
 from backend.shared.db import init_db_pool, close_db_pool, get_conn
 from backend.shared.security import hash_password
 
 # ── реквизиты системного администратора ──────────────────────────────────────
 SYSTEM_ADMIN_LOGIN = "ADMIN"
-SYSTEM_ADMIN_PASSWORD = "REMOVED_ADMIN_PASSWORD"
+SYSTEM_ADMIN_PASSWORD = os.getenv("SYSTEM_ADMIN_PASSWORD", "").strip()
 SYSTEM_ADMIN_DISPLAY_NAME = "Системный администратор"
 
 SYSTEM_ROOT_THANKA_ID = "00000000-0000-0000-0000-000000000010"
@@ -23,6 +23,8 @@ SYSTEM_ROOT_THANKA_ID = "00000000-0000-0000-0000-000000000010"
 
 
 async def main() -> None:
+    if not SYSTEM_ADMIN_PASSWORD:
+        raise RuntimeError("SYSTEM_ADMIN_PASSWORD is not configured")
     # Инициализируем пул соединений
     await init_db_pool()
 

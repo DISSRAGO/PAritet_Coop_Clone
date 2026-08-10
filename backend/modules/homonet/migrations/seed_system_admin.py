@@ -15,10 +15,16 @@ load_dotenv(dotenv_path=ROOT_DIR / ".env")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 ADMIN_LOGIN    = "ADMIN"
-ADMIN_PASSWORD = "admin123"
+ADMIN_PASSWORD = os.getenv("SYSTEM_ADMIN_PASSWORD", "").strip()
 ADMIN_EMAIL    = "admin@system.local"
 ADMIN_DISPLAY  = "Системный администратор"
 THANKA_ID      = "00000000-0000-0000-0000-000000000010"
+
+
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not configured")
+if not ADMIN_PASSWORD:
+    raise RuntimeError("SYSTEM_ADMIN_PASSWORD is not configured")
 
 pw_hash = hash_password(ADMIN_PASSWORD)
 
@@ -95,5 +101,4 @@ with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
 
 print(f"✅ Готово.")
 print(f"   Логин:    {ADMIN_LOGIN}")
-print(f"   Пароль:   {ADMIN_PASSWORD}")
 print(f"   ThankaId: {THANKA_ID}")

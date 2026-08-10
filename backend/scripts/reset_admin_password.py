@@ -9,15 +9,18 @@
 from __future__ import annotations
 
 import asyncio
-
+import os
 from backend.shared.db import init_db_pool, close_db_pool, get_conn
 from backend.shared.security import hash_password
 
 SYSTEM_ADMIN_LOGIN = "ADMIN"
-NEW_PASSWORD = "admin123"
+NEW_PASSWORD = os.getenv("SYSTEM_ADMIN_PASSWORD", "").strip()
 
 
 async def main() -> None:
+    if not NEW_PASSWORD:
+        raise RuntimeError("SYSTEM_ADMIN_PASSWORD is not configured")
+
     await init_db_pool()
     try:
         async with get_conn() as conn:
@@ -66,7 +69,7 @@ async def main() -> None:
                 print("[reset_admin] AFTER:")
                 print(new_row)
 
-        print(f"[reset_admin] Password for {SYSTEM_ADMIN_LOGIN} reset to {NEW_PASSWORD!r}")
+        print(f"[reset_admin] Password reset for {SYSTEM_ADMIN_LOGIN}")
 
     finally:
         await close_db_pool()

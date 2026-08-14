@@ -149,10 +149,19 @@ export function ThankaPic(props) {
     const cropperRef = useRef(null);
     const onCrop = () => {
         const cropper = cropperRef.current?.cropper;
-        const ctx = thumbref.current.getContext('2d');
+        // Защита: cropper.js вызывает onCrop на каждый render/resize своего
+        // внутреннего canvas, включая моменты, когда cropper ещё не готов
+        // или thumbref.current ещё не смонтирован/уже размонтирован —
+        // раньше здесь падало с "Cannot read properties of null (reading 'getContext')".
+        if (!cropper) return;
 
-        ctx.fillRect(0,0,150,150)
-        
+        if (thumbref.current) {
+            const ctx = thumbref.current.getContext('2d');
+            if (ctx) {
+                ctx.fillRect(0, 0, 150, 150);
+            }
+        }
+
         setSize({ height: cropper.canvasData.naturalHeight, width: cropper.canvasData.naturalWidth });
 
         setPicCoord({
@@ -256,6 +265,7 @@ export function ThankaPic(props) {
     },[backgroundImage])
 
 
+
     return(
         <div>
         <p>Изображение для обложки:</p>
@@ -292,9 +302,11 @@ export function ThankaPic(props) {
     )
 }
 
+
 function degToRad(degrees) {
     return degrees * (Math.PI / 180);
 }
+
 
 /*function IconThumbnail(props) {
     const thumbref = useRef()

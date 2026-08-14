@@ -30,6 +30,7 @@ interface ReclamationState {
   inbox: ReclamationListEnvelope | null;
   outbox: ReclamationListEnvelope | null;
   archive: ReclamationListEnvelope | null;
+  currentAllLevels: ReclamationListEnvelope | null;
   dashboard: { data: ReclamationDashboard } | null;
   loading: LoadingState;
   actionLoading: LoadingState;
@@ -42,6 +43,7 @@ const initialState: ReclamationState = {
   inbox: null,
   outbox: null,
   archive: null,
+  currentAllLevels: null,
   dashboard: null,
   loading: "idle",
   actionLoading: "idle",
@@ -101,7 +103,12 @@ async function handleJsonResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const err = data as
-      | { error?: { message?: string }; message?: string; detail?: string; rawText?: string }
+      | {
+          error?: { message?: string };
+          message?: string;
+          detail?: string;
+          rawText?: string;
+        }
       | undefined;
 
     const errorMessage =
@@ -133,9 +140,9 @@ function normalizeListEnvelope(input: unknown): ReclamationListEnvelope {
   return { data: [] };
 }
 
-function normalizeDashboardEnvelope(input: ReclamationDashboard | { data: ReclamationDashboard }): {
-  data: ReclamationDashboard;
-} {
+function normalizeDashboardEnvelope(
+  input: ReclamationDashboard | { data: ReclamationDashboard }
+): { data: ReclamationDashboard } {
   if (typeof input === "object" && input !== null && "data" in input) {
     return input as { data: ReclamationDashboard };
   }
@@ -166,15 +173,18 @@ export const loadReclamationDetail = createAsyncThunk<
   ReclamationFullData,
   string,
   { rejectValue: string }
->("reclamation/loadReclamationDetail", async (reclamationId, { rejectWithValue }) => {
-  try {
-    const response = await ReclamationApi.getById(reclamationId);
-    const payload = response as ReclamationFullResponse;
-    return payload.data;
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/loadReclamationDetail",
+  async (reclamationId, { rejectWithValue }) => {
+    try {
+      const response = await ReclamationApi.getById(reclamationId);
+      const payload = response as ReclamationFullResponse;
+      return payload.data;
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const loadInbox = createAsyncThunk<
   ReclamationListEnvelope,
@@ -228,188 +238,247 @@ export const loadDashboard = createAsyncThunk<
   }
 });
 
-
-export const loadCurrentAllLevels = createAsyncThunk(
-  "reclamation/loadCurrentAllLevels",
-  async (subjectId: string, { rejectWithValue }) => {
-    try {
-      const data = await ReclamationApi.getCurrentAllLevels(subjectId);
-      return data;
-    } catch (error: any) {
-      return rejectWithValue(
-        error?.message || "Не удалось загрузить текущие рекламации (все уровни)"
-      );
-    }
+export const loadCurrentAllLevels = createAsyncThunk<
+  ReclamationListEnvelope,
+  string,
+  { rejectValue: string }
+>("reclamation/loadCurrentAllLevels", async (subjectId, { rejectWithValue }) => {
+  try {
+    const data = await ReclamationApi.getCurrentAllLevels(subjectId);
+    return normalizeListEnvelope(data);
+  } catch (error) {
+    return rejectWithValue(extractApiError(error));
   }
-);
-
+});
 
 export const createReclamation = createAsyncThunk<
   ReclamationSummary,
   ReclamationCreateRequest,
   { rejectValue: string }
->("reclamation/createReclamation", async (payload, { rejectWithValue }) => {
-  try {
-    return await ReclamationApi.create(payload);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/createReclamation",
+  async (payload, { rejectWithValue }) => {
+    try {
+      return await ReclamationApi.create(payload);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const patchReclamation = createAsyncThunk<
   ReclamationStatusTransitionResponse,
   { reclamationId: string; payload: ReclamationPatchRequest },
   { rejectValue: string }
->("reclamation/patchReclamation", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    return await ReclamationApi.patchReclamation(reclamationId, payload);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/patchReclamation",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      return await ReclamationApi.patchReclamation(reclamationId, payload);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const acceptReclamation = createAsyncThunk<
   ReclamationStatusTransitionResponse,
   { reclamationId: string; payload: ReclamationAcceptRequest },
   { rejectValue: string }
->("reclamation/acceptReclamation", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/accept`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<ReclamationStatusTransitionResponse>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/acceptReclamation",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/accept`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<ReclamationStatusTransitionResponse>(
+        response
+      );
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const assignReclamation = createAsyncThunk<
   ReclamationStatusTransitionResponse,
   { reclamationId: string; payload: ReclamationAssignRequest },
   { rejectValue: string }
->("reclamation/assignReclamation", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/assign`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<ReclamationStatusTransitionResponse>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/assignReclamation",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/assign`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<ReclamationStatusTransitionResponse>(
+        response
+      );
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const withdrawReclamation = createAsyncThunk<
   ReclamationStatusTransitionResponse,
   { reclamationId: string; payload: ReclamationWithdrawRequest },
   { rejectValue: string }
->("reclamation/withdrawReclamation", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/withdraw`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<ReclamationStatusTransitionResponse>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/withdrawReclamation",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/withdraw`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<ReclamationStatusTransitionResponse>(
+        response
+      );
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const closeReclamation = createAsyncThunk<
   ReclamationStatusTransitionResponse,
   { reclamationId: string; payload: ReclamationCloseRequest },
   { rejectValue: string }
->("reclamation/closeReclamation", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/close`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<ReclamationStatusTransitionResponse>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/closeReclamation",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/close`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<ReclamationStatusTransitionResponse>(
+        response
+      );
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const escalateReclamation = createAsyncThunk<
   ReclamationEscalateResponse,
   { reclamationId: string; payload: ReclamationEscalateRequest },
   { rejectValue: string }
->("reclamation/escalateReclamation", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    return await ReclamationApi.escalate(reclamationId, payload);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/escalateReclamation",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      return await ReclamationApi.escalate(reclamationId, payload);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const createReclamationMessage = createAsyncThunk<
   unknown,
   { reclamationId: string; payload: ReclamationCreateMessageRequest },
   { rejectValue: string }
->("reclamation/createReclamationMessage", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    return await ReclamationApi.createMessage(reclamationId, payload);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/createReclamationMessage",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      return await ReclamationApi.createMessage(reclamationId, payload);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const createReclamationAttachment = createAsyncThunk<
   unknown,
   { reclamationId: string; payload: ReclamationCreateAttachmentRequest },
   { rejectValue: string }
->("reclamation/createReclamationAttachment", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/attachments`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<unknown>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/createReclamationAttachment",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/attachments`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<unknown>(response);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const createReclamationResponse = createAsyncThunk<
   unknown,
   { reclamationId: string; payload: ReclamationCreateResponseRequest },
   { rejectValue: string }
->("reclamation/createReclamationResponse", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/responses`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<unknown>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/createReclamationResponse",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/responses`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<unknown>(response);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 export const createReclamationDecision = createAsyncThunk<
   unknown,
   { reclamationId: string; payload: ReclamationCreateDecisionRequest },
   { rejectValue: string }
->("reclamation/createReclamationDecision", async ({ reclamationId, payload }, { rejectWithValue }) => {
-  try {
-    const response = await fetch(buildUrl(`/reclamations/${reclamationId}/decisions`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    return await handleJsonResponse<unknown>(response);
-  } catch (error) {
-    return rejectWithValue(extractApiError(error));
+>(
+  "reclamation/createReclamationDecision",
+  async ({ reclamationId, payload }, { rejectWithValue }) => {
+    try {
+      const response = await fetch(
+        buildUrl(`/reclamations/${reclamationId}/decisions`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+      return await handleJsonResponse<unknown>(response);
+    } catch (error) {
+      return rejectWithValue(extractApiError(error));
+    }
   }
-});
+);
 
 const reclamationSlice = createSlice({
   name: "reclamation",
@@ -428,10 +497,13 @@ const reclamationSlice = createSlice({
         state.loading = "loading";
         state.error = null;
       })
-      .addCase(loadReclamations.fulfilled, (state, action: PayloadAction<ReclamationListEnvelope>) => {
-        state.loading = "succeeded";
-        state.list = action.payload;
-      })
+      .addCase(
+        loadReclamations.fulfilled,
+        (state, action: PayloadAction<ReclamationListEnvelope>) => {
+          state.loading = "succeeded";
+          state.list = action.payload;
+        }
+      )
       .addCase(loadReclamations.rejected, (state, action) => {
         state.loading = "failed";
         state.error = action.payload ?? "Failed to fetch reclamations";
@@ -441,10 +513,13 @@ const reclamationSlice = createSlice({
         state.loading = "loading";
         state.error = null;
       })
-      .addCase(loadReclamationDetail.fulfilled, (state, action: PayloadAction<ReclamationFullData>) => {
-        state.loading = "succeeded";
-        state.detail = action.payload;
-      })
+      .addCase(
+        loadReclamationDetail.fulfilled,
+        (state, action: PayloadAction<ReclamationFullData>) => {
+          state.loading = "succeeded";
+          state.detail = action.payload;
+        }
+      )
       .addCase(loadReclamationDetail.rejected, (state, action) => {
         state.loading = "failed";
         state.error = action.payload ?? "Failed to fetch reclamation detail";
@@ -454,10 +529,13 @@ const reclamationSlice = createSlice({
         state.loading = "loading";
         state.error = null;
       })
-      .addCase(loadInbox.fulfilled, (state, action: PayloadAction<ReclamationListEnvelope>) => {
-        state.loading = "succeeded";
-        state.inbox = action.payload;
-      })
+      .addCase(
+        loadInbox.fulfilled,
+        (state, action: PayloadAction<ReclamationListEnvelope>) => {
+          state.loading = "succeeded";
+          state.inbox = action.payload;
+        }
+      )
       .addCase(loadInbox.rejected, (state, action) => {
         state.loading = "failed";
         state.error = action.payload ?? "Failed to fetch inbox";
@@ -467,10 +545,13 @@ const reclamationSlice = createSlice({
         state.loading = "loading";
         state.error = null;
       })
-      .addCase(loadOutbox.fulfilled, (state, action: PayloadAction<ReclamationListEnvelope>) => {
-        state.loading = "succeeded";
-        state.outbox = action.payload;
-      })
+      .addCase(
+        loadOutbox.fulfilled,
+        (state, action: PayloadAction<ReclamationListEnvelope>) => {
+          state.loading = "succeeded";
+          state.outbox = action.payload;
+        }
+      )
       .addCase(loadOutbox.rejected, (state, action) => {
         state.loading = "failed";
         state.error = action.payload ?? "Failed to fetch outbox";
@@ -480,10 +561,13 @@ const reclamationSlice = createSlice({
         state.loading = "loading";
         state.error = null;
       })
-      .addCase(loadArchive.fulfilled, (state, action: PayloadAction<ReclamationListEnvelope>) => {
-        state.loading = "succeeded";
-        state.archive = action.payload;
-      })
+      .addCase(
+        loadArchive.fulfilled,
+        (state, action: PayloadAction<ReclamationListEnvelope>) => {
+          state.loading = "succeeded";
+          state.archive = action.payload;
+        }
+      )
       .addCase(loadArchive.rejected, (state, action) => {
         state.loading = "failed";
         state.error = action.payload ?? "Failed to fetch archive";
@@ -493,13 +577,34 @@ const reclamationSlice = createSlice({
         state.loading = "loading";
         state.error = null;
       })
-      .addCase(loadDashboard.fulfilled, (state, action: PayloadAction<{ data: ReclamationDashboard }>) => {
-        state.loading = "succeeded";
-        state.dashboard = action.payload;
-      })
+      .addCase(
+        loadDashboard.fulfilled,
+        (state, action: PayloadAction<{ data: ReclamationDashboard }>) => {
+          state.loading = "succeeded";
+          state.dashboard = action.payload;
+        }
+      )
       .addCase(loadDashboard.rejected, (state, action) => {
         state.loading = "failed";
         state.error = action.payload ?? "Failed to fetch dashboard";
+      })
+
+      .addCase(loadCurrentAllLevels.pending, (state) => {
+        state.loading = "loading";
+        state.error = null;
+      })
+      .addCase(
+        loadCurrentAllLevels.fulfilled,
+        (state, action: PayloadAction<ReclamationListEnvelope>) => {
+          state.loading = "succeeded";
+          state.currentAllLevels = action.payload;
+        }
+      )
+      .addCase(loadCurrentAllLevels.rejected, (state, action) => {
+        state.loading = "failed";
+        state.error =
+          action.payload ??
+          "Failed to fetch current reclamations (all escalation levels)";
       })
 
       .addCase(createReclamation.pending, (state) => {
@@ -636,5 +741,6 @@ const reclamationSlice = createSlice({
   },
 });
 
-export const { clearReclamationError, clearReclamationDetail } = reclamationSlice.actions;
+export const { clearReclamationError, clearReclamationDetail } =
+  reclamationSlice.actions;
 export default reclamationSlice.reducer;

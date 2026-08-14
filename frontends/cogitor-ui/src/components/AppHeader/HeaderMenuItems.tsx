@@ -1,3 +1,5 @@
+// /srv/clone/frontends/cogitor-ui/src/components/AppHeader/HeaderMenuItems.tsx
+
 import {
   LogoutOutlined,
   HomeOutlined,
@@ -20,7 +22,7 @@ import {
   DEFAULT_AVATAR_URL,
 } from "../../utils/avatar";
 import { getAccessToken } from "../../utils/checkAuth";
-import { loadDashboard, loadInbox } from "../../store/reclamationSlice";
+import { loadDashboard, loadInbox, loadOutbox } from "../../store/reclamationSlice";
 import { useDispatch } from "react-redux";
 
 const resolveCurrentSubjectId = (state: any): string => {
@@ -44,6 +46,7 @@ const resolveCurrentSubjectId = (state: any): string => {
     state?.user?.profile?.subjectId || state?.user?.profile?.subject_id;
 
   if (fromProfile) return String(fromProfile);
+
   console.log("resolveCurrentSubjectId state.user.headerInfo =", state?.user?.headerInfo);
   console.log("resolved subjectId =", fromHeader || fromAuth || fromProfile || "");
   return "";
@@ -78,6 +81,7 @@ const HeaderMenuItems: FC = () => {
 
     dispatch(loadDashboard(subjectId));
     dispatch(loadInbox(subjectId));
+    dispatch(loadOutbox(subjectId));
   }, [dispatch, isAuth, subjectId]);
 
   const getAvatar = (): string => {
@@ -147,11 +151,50 @@ const HeaderMenuItems: FC = () => {
   }
 
   const reclamationsUnreadCount = useMemo(() => {
-    const inbox = Array.isArray(reclamationState?.inbox)
-      ? reclamationState.inbox
+    const inboxEnvelope = reclamationState?.inbox;
+    const outboxEnvelope = reclamationState?.outbox;
+
+    const inbox = Array.isArray(inboxEnvelope?.data)
+      ? inboxEnvelope.data
+      : Array.isArray(inboxEnvelope)
+      ? inboxEnvelope
       : [];
-    return inbox.filter((item: any) => !!item?.hasUnread).length;
-  }, [reclamationState?.inbox]);
+
+    const outbox = Array.isArray(outboxEnvelope?.data)
+      ? outboxEnvelope.data
+      : Array.isArray(outboxEnvelope)
+      ? outboxEnvelope
+      : [];
+
+    let count = 0;
+
+    // Входящие: +1 за "зарегистрировано", +1 за непрочитанные сообщения
+    inbox.forEach((item: any) => {
+      const status = String(item?.status || "").toLowerCase();
+      const unreadMessages =
+        Number(item?.unreadCount ?? 0) > 0 || !!item?.hasUnread;
+
+      if (status === "registered") {
+        count += 1;
+      }
+
+      if (unreadMessages) {
+        count += 1;
+      }
+    });
+
+    // Исходящие: +1 за непрочитанные сообщения
+    outbox.forEach((item: any) => {
+      const unreadMessages =
+        Number(item?.unreadCount ?? 0) > 0 || !!item?.hasUnread;
+
+      if (unreadMessages) {
+        count += 1;
+      }
+    });
+
+    return count;
+  }, [reclamationState?.inbox, reclamationState?.outbox]);
 
   const reclamationsLabel = (
     <Badge

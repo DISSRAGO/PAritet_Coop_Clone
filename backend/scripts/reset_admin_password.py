@@ -34,8 +34,7 @@ async def main() -> None:
                       is_active,
                       is_superuser,
                       is_verified,
-                      is_confirmed,
-                      password_hash
+                      is_confirmed
                     FROM auth_user
                     WHERE LOWER(login) = LOWER(%s)
                     """,

@@ -1,3 +1,5 @@
+// /srv/clone/frontends/cogitor-ui/src/pages/ReclamationPanelPage.tsx
+
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -20,6 +22,7 @@ import moment, { Moment } from "moment";
 import type { RangeValue } from "rc-picker/lib/interface";
 
 
+
 import {
   loadArchive,
   loadDashboard,
@@ -34,12 +37,15 @@ import type {
 import { Urls } from "../utils/urls";
 
 
+
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
 const { TextArea } = Input;
 
 
+
 type PanelTab = "inbox" | "outbox" | "current" | "archive";
+
 
 
 type PanelAction = {
@@ -52,6 +58,7 @@ type PanelAction = {
 };
 
 
+
 type ChatMessage = {
   messageId: string;
   authorSubjectId: string;
@@ -59,6 +66,7 @@ type ChatMessage = {
   body: string;
   createdAt: string;
 };
+
 
 
 const STATUS_LABELS: Record<string, string> = {
@@ -77,6 +85,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 
+
 const ARCHIVE_STATUSES = new Set<ReclamationStatus>([
   "completed",
   "closed",
@@ -84,9 +93,11 @@ const ARCHIVE_STATUSES = new Set<ReclamationStatus>([
 ]);
 
 
+
 const NON_ARCHIVE_STATUSES: ReclamationStatus[] = (
   Object.keys(STATUS_LABELS) as ReclamationStatus[]
 ).filter((s) => !ARCHIVE_STATUSES.has(s));
+
 
 
 const INBOX_EXECUTOR_STATUSES = new Set<ReclamationStatus>([
@@ -99,11 +110,13 @@ const INBOX_EXECUTOR_STATUSES = new Set<ReclamationStatus>([
 ]);
 
 
+
 function translateStatus(status?: string): string {
   return (
     STATUS_LABELS[String(status || "").toLowerCase()] || String(status || "—")
   );
 }
+
 
 
 function getStatusPalette(status?: string): {
@@ -126,6 +139,7 @@ function getStatusPalette(status?: string): {
   };
 
 
+
   return (
     map[String(status || "").toLowerCase()] || {
       bg: "#fafafa",
@@ -136,9 +150,11 @@ function getStatusPalette(status?: string): {
 }
 
 
+
 function renderStatusBadge(status?: string): React.ReactNode {
   const label = translateStatus(status);
   const palette = getStatusPalette(status);
+
 
 
   return (
@@ -165,6 +181,7 @@ function renderStatusBadge(status?: string): React.ReactNode {
 }
 
 
+
 function isUuidLike(value: string | null | undefined): boolean {
   if (!value) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -173,11 +190,13 @@ function isUuidLike(value: string | null | undefined): boolean {
 }
 
 
+
 function resolveCurrentSubjectId(state: any): string {
   const fromHeader =
     state?.user?.headerInfo?.data?.subjectId ||
     state?.user?.headerInfo?.data?.subject_id;
   if (fromHeader) return String(fromHeader);
+
 
 
   const fromAuth =
@@ -188,13 +207,16 @@ function resolveCurrentSubjectId(state: any): string {
   if (fromAuth) return String(fromAuth);
 
 
+
   const fromProfile =
     state?.user?.profile?.subjectId || state?.user?.profile?.subject_id;
   if (fromProfile) return String(fromProfile);
 
 
+
   return "";
 }
+
 
 
 function formatDate(value?: string): string {
@@ -205,6 +227,7 @@ function formatDate(value?: string): string {
 }
 
 
+
 function getApiBaseUrl(): string {
   const explicit =
     (Urls as any)?.RECLAMATION_API_URL ||
@@ -212,9 +235,11 @@ function getApiBaseUrl(): string {
     (Urls as any)?.BASE_API_URL;
 
 
+
   if (explicit) {
     return String(explicit).replace(/\/$/, "");
   }
+
 
 
   if (typeof window !== "undefined" && window.location.origin) {
@@ -222,8 +247,10 @@ function getApiBaseUrl(): string {
   }
 
 
+
   return "/api";
 }
+
 
 
 type ThankaUrlInfo = {
@@ -233,12 +260,15 @@ type ThankaUrlInfo = {
 };
 
 
+
 const ThankaNavigatorLink: React.FC<{ thankaId: string }> = ({ thankaId }) => {
   const [info, setInfo] = React.useState<ThankaUrlInfo | null>(null);
 
 
+
   React.useEffect(() => {
     let cancelled = false;
+
 
 
     async function load() {
@@ -248,6 +278,7 @@ const ThankaNavigatorLink: React.FC<{ thankaId: string }> = ({ thankaId }) => {
         if (!resp.ok) return;
         const json = await resp.json();
         if (cancelled) return;
+
 
 
         setInfo({
@@ -263,7 +294,9 @@ const ThankaNavigatorLink: React.FC<{ thankaId: string }> = ({ thankaId }) => {
     }
 
 
+
     load();
+
 
 
     return () => {
@@ -272,15 +305,18 @@ const ThankaNavigatorLink: React.FC<{ thankaId: string }> = ({ thankaId }) => {
   }, [thankaId]);
 
 
+
   const origin =
     typeof window !== "undefined" && window.location.origin
       ? window.location.origin
       : "";
 
 
+
   const slug = info?.customUrl ? String(info.customUrl) : thankaId;
   const path = `/navigator/${slug}`;
   const text = origin ? `${origin}${path}` : path;
+
 
 
   return (
@@ -291,14 +327,17 @@ const ThankaNavigatorLink: React.FC<{ thankaId: string }> = ({ thankaId }) => {
 };
 
 
+
 function renderObjectCell(item: ReclamationSummary): React.ReactNode {
   const type = String(item.targetType || "").toLowerCase();
   const id = (item.targetId || "").trim();
 
 
+
   if (type === "thanka" && id) {
     return <ThankaNavigatorLink thankaId={id} />;
   }
+
 
 
   return (
@@ -307,6 +346,7 @@ function renderObjectCell(item: ReclamationSummary): React.ReactNode {
     </Text>
   );
 }
+
 
 
 function filterByCreatedAtRange(
@@ -318,8 +358,10 @@ function filterByCreatedAtRange(
   }
 
 
+
   const from = range[0].clone().startOf("day");
   const to = range[1].clone().endOf("day");
+
 
 
   return items.filter((item) => {
@@ -331,22 +373,27 @@ function filterByCreatedAtRange(
 }
 
 
+
 function buildActions(
   item: ReclamationSummary,
   subjectId: string
 ): PanelAction[] {
   const status = String(item.status || "").toLowerCase() as ReclamationStatus;
 
+
   const effectiveClaimantId =
     item.claimantEffectiveSubjectId || item.createdBySubjectId;
+
 
   const effectiveExecutorId =
     item.currentResponsibleSubjectId ||
     item.respondentEffectiveSubjectId ||
     item.respondentSubjectId;
 
+
   const isClaimant = effectiveClaimantId === subjectId;
   const isExecutor = effectiveExecutorId === subjectId;
+
 
   // В финальном режиме председатель является одновременно claimant,
   // respondent и current responsible. Но UI показывает ему только
@@ -356,7 +403,9 @@ function buildActions(
     isExecutor &&
     effectiveClaimantId === effectiveExecutorId;
 
+
   const actions: PanelAction[] = [];
+
 
   if (isExecutor) {
     if (
@@ -372,6 +421,7 @@ function buildActions(
       });
     }
 
+
     if (status === "accepted") {
       actions.push({
         key: "start",
@@ -386,6 +436,7 @@ function buildActions(
         danger: true,
       });
     }
+
 
     if (status === "in_progress") {
       actions.push({
@@ -406,6 +457,7 @@ function buildActions(
         disabled: true,
       });
     }
+
 
     if (status === "waiting_response") {
       actions.push({
@@ -428,6 +480,7 @@ function buildActions(
     }
   }
 
+
   // У председателя нет отдельного claimant-набора кнопок:
   // его решение окончательно и выполняется через исполнительские действия.
   if (isClaimant && !isChairmanCase) {
@@ -444,6 +497,7 @@ function buildActions(
       });
     }
 
+
     if (status === "waiting_response") {
       actions.push({
         key: "reply_hint",
@@ -452,6 +506,7 @@ function buildActions(
       });
     }
 
+
     if (status === "rejected") {
       actions.push({
         key: "escalate",
@@ -459,6 +514,7 @@ function buildActions(
         danger: true,
       });
     }
+
 
     if (status === "resolved") {
       actions.push({
@@ -480,8 +536,10 @@ function buildActions(
     }
   }
 
+
   return actions;
 }
+
 
 
 const ReclamationPanelPage: React.FC = () => {
@@ -489,6 +547,8 @@ const ReclamationPanelPage: React.FC = () => {
   const reclamationState = useSelector((state: any) => state.reclamation || {});
   const subjectId = useSelector((state: any) => resolveCurrentSubjectId(state));
   const [currentAllLevels, setCurrentAllLevels] = useState<ReclamationSummary[]>([]);
+  const [currentAllLevelsLoading, setCurrentAllLevelsLoading] = useState(false);
+
 
 
   const inbox: ReclamationSummary[] = Array.isArray(
@@ -500,6 +560,7 @@ const ReclamationPanelPage: React.FC = () => {
     : [];
 
 
+
   const outbox: ReclamationSummary[] = Array.isArray(
     reclamationState.outbox?.data
   )
@@ -507,6 +568,7 @@ const ReclamationPanelPage: React.FC = () => {
     : Array.isArray(reclamationState.outbox)
     ? reclamationState.outbox
     : [];
+
 
 
   const archive: ReclamationSummary[] = Array.isArray(
@@ -518,9 +580,12 @@ const ReclamationPanelPage: React.FC = () => {
     : [];
 
 
+
   const dashboard = reclamationState.dashboard || null;
-  const loading: boolean = reclamationState.loading === "loading";
+  const loading: boolean =
+    reclamationState.loading === "loading" || currentAllLevelsLoading;
   const stateError: string | null = reclamationState.error || null;
+
 
 
   const [tab, setTab] = useState<PanelTab>("inbox");
@@ -528,6 +593,7 @@ const ReclamationPanelPage: React.FC = () => {
   const [archiveRange, setArchiveRange] = useState<RangeValue<Moment>>(null);
   const [currentRange, setCurrentRange] = useState<RangeValue<Moment>>(null);
   const [currentStatus, setCurrentStatus] = useState<string>("");
+
 
 
   const [chatOpen, setChatOpen] = useState(false);
@@ -539,11 +605,31 @@ const ReclamationPanelPage: React.FC = () => {
   const [chatSending, setChatSending] = useState(false);
 
 
+
   const subjectReady = useMemo(() => isUuidLike(subjectId), [subjectId]);
+
+
+
+  const loadCurrentAllLevelsLocal = async (id: string) => {
+    setCurrentAllLevelsLoading(true);
+    try {
+      const data = await ReclamationApi.getCurrentAllLevels(id);
+      setCurrentAllLevels(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error(
+        "Failed to load current reclamations (all levels)",
+        error?.message || error
+      );
+    } finally {
+      setCurrentAllLevelsLoading(false);
+    }
+  };
+
 
 
   useEffect(() => {
     if (!subjectReady || !subjectId) return;
+
 
 
     dispatch(loadInbox(subjectId));
@@ -552,30 +638,10 @@ const ReclamationPanelPage: React.FC = () => {
     dispatch(loadDashboard(subjectId));
 
 
-    // Локальная загрузка всех уровней
-    (async () => {
-      try {
-        const data = await ReclamationApi.getCurrentAllLevels(subjectId);
-        setCurrentAllLevels(data);
-      } catch (error: any) {
-        // Не ломаем страницу, просто логируем
-        console.error(
-          "Failed to load current reclamations (all levels)",
-          error?.message || error
-        );
-      }
-    })();
+
+    loadCurrentAllLevelsLocal(subjectId);
   }, [dispatch, subjectId, subjectReady]);
 
-
-  const allParticipating = useMemo(
-    () =>
-      [...inbox, ...outbox].filter(
-        (item, i, arr) =>
-          arr.findIndex((x) => x.reclamationId === item.reclamationId) === i
-      ),
-    [inbox, outbox]
-  );
 
 
   const inboxExecutorItems = useMemo(
@@ -589,6 +655,7 @@ const ReclamationPanelPage: React.FC = () => {
   );
 
 
+
   const currentData = useMemo(() => {
     if (tab === "inbox") {
       return inboxExecutorItems;
@@ -596,13 +663,10 @@ const ReclamationPanelPage: React.FC = () => {
     if (tab === "outbox") return outbox;
 
 
+
     if (tab === "current") {
-      let items = allParticipating.filter(
-        (item) =>
-          !ARCHIVE_STATUSES.has(
-            String(item.status || "").toLowerCase() as ReclamationStatus
-          )
-      );
+      let items = currentAllLevels;
+
 
 
       if (currentStatus) {
@@ -613,13 +677,16 @@ const ReclamationPanelPage: React.FC = () => {
       }
 
 
+
       return filterByCreatedAtRange(items, currentRange);
     }
+
 
 
     if (tab === "archive") {
       return filterByCreatedAtRange(archive, archiveRange);
     }
+
 
 
     return [];
@@ -628,11 +695,12 @@ const ReclamationPanelPage: React.FC = () => {
     inboxExecutorItems,
     outbox,
     archive,
-    allParticipating,
+    currentAllLevels,
     archiveRange,
     currentRange,
     currentStatus,
   ]);
+
 
 
   const refreshAll = async () => {
@@ -645,16 +713,10 @@ const ReclamationPanelPage: React.FC = () => {
     ]);
 
 
-    try {
-      const data = await ReclamationApi.getCurrentAllLevels(subjectId);
-      setCurrentAllLevels(data);
-    } catch (error: any) {
-      console.error(
-        "Failed to refresh current reclamations (all levels)",
-        error?.message || error
-      );
-    }
+
+    await loadCurrentAllLevelsLocal(subjectId);
   };
+
 
 
   const openChat = async (item: ReclamationSummary) => {
@@ -666,11 +728,13 @@ const ReclamationPanelPage: React.FC = () => {
     setChatInput("");
 
 
+
     try {
       const resp = await ReclamationApi.getById(item.reclamationId);
       const data = resp?.data || resp;
       const messages = Array.isArray(data?.messages) ? data.messages : [];
       setChatMessages(messages);
+
 
 
       if (subjectId && (tab === "inbox" || !!item.hasUnread || !!item.unreadCount)) {
@@ -688,8 +752,10 @@ const ReclamationPanelPage: React.FC = () => {
   };
 
 
+
   const sendChatMessage = async () => {
     if (!chatItem || !subjectId || !chatInput.trim()) return;
+
 
 
     try {
@@ -700,6 +766,7 @@ const ReclamationPanelPage: React.FC = () => {
         messageType: "comment",
         visibility: "participants",
       });
+
 
 
       setChatInput("");
@@ -716,6 +783,7 @@ const ReclamationPanelPage: React.FC = () => {
   };
 
 
+
   const runStatusAction = async (
     item: ReclamationSummary,
     action: PanelAction
@@ -726,8 +794,10 @@ const ReclamationPanelPage: React.FC = () => {
     }
 
 
+
     if (action.key === "escalate") {
       let escalationComment = "";
+
 
 
       Modal.confirm({
@@ -756,10 +826,12 @@ const ReclamationPanelPage: React.FC = () => {
           const trimmedComment = escalationComment.trim();
 
 
+
           if (trimmedComment.length < 3) {
             message.error("Укажите причину эскалации (минимум 3 символа)");
             return Promise.reject();
           }
+
 
 
           const lk = `${item.reclamationId}:escalate`;
@@ -781,8 +853,10 @@ const ReclamationPanelPage: React.FC = () => {
       });
 
 
+
       return;
     }
+
 
 
 
@@ -796,8 +870,10 @@ const ReclamationPanelPage: React.FC = () => {
     }
 
 
+
     const currentStatusValue = String(item.status || "").toLowerCase() as ReclamationStatus;
     const nextStatus = action.nextStatus;
+
 
 
     Modal.confirm({
@@ -834,7 +910,9 @@ const ReclamationPanelPage: React.FC = () => {
   };
 
 
+
   const isReadOnlyTab = tab === "archive";
+
 
 
   const columns: ColumnsType<ReclamationSummary> = [
@@ -862,6 +940,7 @@ const ReclamationPanelPage: React.FC = () => {
               if (!subjectReady || !subjectId) return "—";
               const actions = buildActions(item, subjectId);
               if (!actions.length) return "—";
+
 
 
               return (
@@ -931,6 +1010,7 @@ const ReclamationPanelPage: React.FC = () => {
   ];
 
 
+
   if (!subjectReady || !subjectId) {
     return (
       <div>
@@ -945,12 +1025,9 @@ const ReclamationPanelPage: React.FC = () => {
   }
 
 
-  const currentCount = allParticipating.filter(
-    (item) =>
-      !ARCHIVE_STATUSES.has(
-        String(item.status || "").toLowerCase() as ReclamationStatus
-      )
-  ).length;
+
+  const currentCount = currentAllLevels.length;
+
 
 
   const segmentedOptions = [
@@ -975,9 +1052,11 @@ const ReclamationPanelPage: React.FC = () => {
   ];
 
 
+
   return (
     <div>
       <Title level={2}>Рекламации</Title>
+
 
 
       {stateError && (
@@ -990,12 +1069,14 @@ const ReclamationPanelPage: React.FC = () => {
       )}
 
 
+
       <Segmented
         value={tab}
         onChange={(value) => setTab(value as PanelTab)}
         options={segmentedOptions}
         style={{ marginBottom: 16 }}
       />
+
 
 
       {tab === "current" && (
@@ -1022,6 +1103,7 @@ const ReclamationPanelPage: React.FC = () => {
       )}
 
 
+
       {tab === "archive" && (
         <Space style={{ marginBottom: 16 }} wrap>
           <RangePicker
@@ -1034,6 +1116,7 @@ const ReclamationPanelPage: React.FC = () => {
       )}
 
 
+
       <Table<ReclamationSummary>
         rowKey="reclamationId"
         columns={columns}
@@ -1042,6 +1125,7 @@ const ReclamationPanelPage: React.FC = () => {
         pagination={{ pageSize: 10, hideOnSinglePage: false }}
         scroll={{ x: 1100 }}
       />
+
 
 
       <Drawer
@@ -1075,9 +1159,11 @@ const ReclamationPanelPage: React.FC = () => {
               )}
 
 
+
               {chatMessages.map((m) => {
                 const isMine = m.authorSubjectId === subjectId;
                 const isSystem = m.messageType === "system_note";
+
 
 
                 return (
@@ -1108,6 +1194,7 @@ const ReclamationPanelPage: React.FC = () => {
             </div>
 
 
+
             <Space direction="vertical" style={{ width: "100%" }}>
               <TextArea
                 rows={4}
@@ -1129,9 +1216,11 @@ const ReclamationPanelPage: React.FC = () => {
 
 
 
+
     </div>
   );
 };
+
 
 
 export default ReclamationPanelPage;

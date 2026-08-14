@@ -112,10 +112,11 @@ function normalizeSummary(item: any): ReclamationSummary {
       item?.respondentEffectiveSubjectId ||
       item?.respondent_effective_subject_id ||
       undefined,
-    escalationLevel: Number(item?.escalationLevel ?? item?.escalation_level ?? 0),
+    escalationLevel: Number(
+      item?.escalationLevel ?? item?.escalation_level ?? 0
+    ),
   } as ReclamationSummary;
 }
-
 
 function normalizeDashboard(data: any): ReclamationDashboard {
   return {
@@ -140,7 +141,8 @@ function normalizeFullResponse(json: any): ReclamationFullResponse {
         ? {
             ...data.reclamation,
             reclamationType: normalizeReclamationType(
-              data.reclamation?.reclamationType || data.reclamation?.reclamation_type
+              data.reclamation?.reclamationType ||
+                data.reclamation?.reclamation_type
             ),
             status: normalizeStatus(data.reclamation?.status),
             priority: normalizePriority(data.reclamation?.priority),
@@ -337,7 +339,9 @@ export default class ReclamationService {
       }
     );
 
-    const json: ReclamationListEnvelope | any = await handleJsonResponse(response);
+    const json: ReclamationListEnvelope | any = await handleJsonResponse(
+      response
+    );
     return toList(json);
   }
 
@@ -358,7 +362,9 @@ export default class ReclamationService {
       }
     );
 
-    const json: ReclamationListEnvelope | any = await handleJsonResponse(response);
+    const json: ReclamationListEnvelope | any = await handleJsonResponse(
+      response
+    );
     return toList(json);
   }
 
@@ -380,7 +386,9 @@ export default class ReclamationService {
       }
     );
 
-    const json: ReclamationListEnvelope | any = await handleJsonResponse(response);
+    const json: ReclamationListEnvelope | any = await handleJsonResponse(
+      response
+    );
     return toList(json);
   }
 
@@ -401,7 +409,9 @@ export default class ReclamationService {
       }
     );
 
-    const json: ReclamationListEnvelope | any = await handleJsonResponse(response);
+    const json: ReclamationListEnvelope | any = await handleJsonResponse(
+      response
+    );
     return toList(json);
   }
 
@@ -447,7 +457,6 @@ export default class ReclamationService {
 
     return handleJsonResponse(response);
   }
-
 
   static async getCurrentAllLevels(
     subjectId: string,

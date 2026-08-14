@@ -93,6 +93,12 @@ class ReclamationService:
     _DEFAULT_PAGE_SIZE = 20
 
     async def _get_confirmed_guarantor_subject_id(self, subject_id: str) -> str:
+        """
+        Возвращает subject_id подтверждённого поручителя.
+        Если его ещё нет — автоматически навешивает админа (login='admin')
+        как confirmed + is_default, затем возвращает его subject_id.
+        """
+        # 1. Пытаемся найти уже существующего confirmed‑поручителя
         row = await self._fetch_one(
             """
             SELECT guarantor_subject_id::text AS guarantor_subject_id
@@ -104,12 +110,70 @@ class ReclamationService:
             """,
             subject_id,
         )
-        if not row or not row.get("guarantor_subject_id"):
+        if row and row.get("guarantor_subject_id"):
+            return row["guarantor_subject_id"]
+
+        # 2. Ищем subject админа по auth_user.login = 'admin'
+        admin_row = await self._fetch_one(
+            """
+            SELECT subject_id::text AS subject_id
+            FROM homonet.auth_user
+            WHERE login = 'admin'
+              AND is_active = TRUE
+              AND is_superuser = TRUE
+              AND subject_id IS NOT NULL
+            LIMIT 1
+            """
+        )
+        if not admin_row or not admin_row.get("subject_id"):
+            # Админа или его subject_id нет — сохранить прежнее поведение
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Confirmed guarantor for subject {subject_id} not found",
             )
-        return row["guarantor_subject_id"]
+
+        admin_subject_id = admin_row["subject_id"]
+
+        # На всякий случай не создаём "сам себе поручитель"
+        if admin_subject_id == subject_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Confirmed guarantor for subject {subject_id} not found",
+            )
+
+        # 3. Автоматически создаём запись в subject_guarantor
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO homonet.subject_guarantor (
+                        subject_id,
+                        guarantor_subject_id,
+                        status,
+                        is_default,
+                        requested_at,
+                        requested_by_subject_id,
+                        confirmed_at
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        'confirmed',
+                        TRUE,
+                        now(),
+                        %s,
+                        now()
+                    )
+                    ON CONFLICT (subject_id, guarantor_subject_id) DO NOTHING
+                    """,
+                    (
+                        subject_id,
+                        admin_subject_id,
+                        admin_subject_id,
+                    ),
+                )
+
+        return admin_subject_id
 
 
     async def _is_active_superuser_subject(self, subject_id: str) -> bool:
@@ -212,6 +276,80 @@ class ReclamationService:
         if rec.get("current_responsible_subject_id"):
             return str(rec["current_responsible_subject_id"])
         return ReclamationService._effective_respondent_id(rec)
+
+    async def _insert_status_change_message(
+        self,
+        reclamation_id: str,
+        actor_subject_id: Optional[str],
+        old_status: str,
+        new_status: str,
+    ) -> None:
+        """
+        Создаёт системное сообщение в чат о смене статуса рекламации.
+        Используем тип 'comment', чтобы сообщение отображалось как обычная реплика.
+        """
+        if old_status == new_status:
+            return
+
+        text = f"Статус рекламации изменён: {old_status} → {new_status}"
+
+        async with get_conn() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    """
+                    INSERT INTO homonet.reclamation_message (
+                        reclamation_id,
+                        author_subject_id,
+                        message_type,
+                        body,
+                        visibility
+                    )
+                    VALUES (
+                        %s,
+                        %s,
+                        'comment'::homonet.reclamation_message_type_enum,
+                        %s,
+                        'participants'::homonet.reclamation_visibility_enum
+                    )
+                    RETURNING message_id
+                    """,
+                    (
+                        reclamation_id,
+                        actor_subject_id,
+                        text,
+                    ),
+                )
+                row = await cur.fetchone()
+                message_id = str(row["message_id"])
+
+                await cur.execute(
+                    """
+                    INSERT INTO homonet.reclamation_event (
+                        reclamation_id,
+                        event_type,
+                        actor_subject_id,
+                        payload
+                    )
+                    VALUES (
+                        %s,
+                        'message_added',
+                        %s,
+                        %s::jsonb
+                    )
+                    """,
+                    (
+                        reclamation_id,
+                        actor_subject_id,
+                        json.dumps(
+                            {
+                                "messageId": message_id,
+                                "messageType": "comment",
+                                "source": "status_change",
+                            }
+                        ),
+                    ),
+                )
+
 
     @staticmethod
     def _build_list_item(r: dict, unread_count: int = 0, is_current_actor: bool = True) -> ReclamationListItem:
@@ -983,6 +1121,15 @@ class ReclamationService:
                             ),
                         )
 
+        # Системное сообщение в чат о смене статуса (если он действительно поменялся)
+        if final_status and final_status != current_status:
+            await self._insert_status_change_message(
+                reclamation_id=reclamation_id,
+                actor_subject_id=actor_id,
+                old_status=current_status,
+                new_status=final_status,
+            )
+
         if chairman_final_decision:
             return StatusTransitionResponse(
                 reclamationId=reclamation_id,
@@ -1000,7 +1147,7 @@ class ReclamationService:
             message="updated",
         )
 
-
+    
     async def accept_reclamation(
         self,
         reclamation_id: str,
@@ -1022,7 +1169,8 @@ class ReclamationService:
                 detail="only_executor_can_accept_reclamation",
             )
 
-        self._check_transition(str(rec["status"]), "accepted")
+        old_status = str(rec["status"])
+        self._check_transition(old_status, "accepted")
 
         async with get_conn() as conn:
             async with conn.cursor() as cur:
@@ -1068,12 +1216,20 @@ class ReclamationService:
                     ),
                 )
 
+        await self._insert_status_change_message(
+            reclamation_id=reclamation_id,
+            actor_subject_id=payload.actorSubjectId,
+            old_status=old_status,
+            new_status="accepted",
+        )
+
         return StatusTransitionResponse(
             reclamationId=reclamation_id,
             status="accepted",
             message="reclamation accepted",
         )
 
+    
     async def assign_reclamation(
         self,
         reclamation_id: str,
@@ -1141,7 +1297,8 @@ class ReclamationService:
                 detail="only_claimant_can_cancel_reclamation",
             )
 
-        self._check_transition(str(rec["status"]), "cancelled")
+        old_status = str(rec["status"])
+        self._check_transition(old_status, "cancelled")
 
         async with get_conn() as conn:
             async with conn.cursor() as cur:
@@ -1164,11 +1321,19 @@ class ReclamationService:
                     (reclamation_id, payload.actorSubjectId),
                 )
 
+        await self._insert_status_change_message(
+            reclamation_id=reclamation_id,
+            actor_subject_id=payload.actorSubjectId,
+            old_status=old_status,
+            new_status="cancelled",
+        )
+
         return StatusTransitionResponse(
             reclamationId=reclamation_id,
             status="cancelled",
             message="reclamation cancelled",
         )
+
 
     async def close_reclamation(
         self,
@@ -1191,7 +1356,8 @@ class ReclamationService:
                 detail="only_executor_can_close_reclamation",
             )
 
-        self._check_transition(str(rec["status"]), "closed")
+        old_status = str(rec["status"])
+        self._check_transition(old_status, "closed")
 
         async with get_conn() as conn:
             async with conn.cursor() as cur:
@@ -1214,11 +1380,19 @@ class ReclamationService:
                     (reclamation_id, payload.actorSubjectId),
                 )
 
+        await self._insert_status_change_message(
+            reclamation_id=reclamation_id,
+            actor_subject_id=payload.actorSubjectId,
+            old_status=old_status,
+            new_status="closed",
+        )
+
         return StatusTransitionResponse(
             reclamationId=reclamation_id,
             status="closed",
             message="reclamation closed",
         )
+
 
     async def escalate_reclamation(
         self,
@@ -1652,6 +1826,10 @@ class ReclamationService:
                 ),
             )
 
+        message_id: Optional[str] = None
+        created_at: Optional[str] = None
+        auto_status: Optional[str] = None
+
         async with get_conn() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
@@ -1720,8 +1898,7 @@ class ReclamationService:
                 is_claimant = actor_id == claimant_id
                 is_executor = actor_id == responsible_id
 
-                auto_status = None
-
+                # Автоматическая смена статуса по типу сообщения
                 if (
                     payload.messageType == "clarification_request"
                     and is_executor
@@ -1769,6 +1946,14 @@ class ReclamationService:
                             ),
                         ),
                     )
+
+        if auto_status:
+            await self._insert_status_change_message(
+                reclamation_id=reclamation_id,
+                actor_subject_id=payload.actorSubjectId,
+                old_status=current_status,
+                new_status=auto_status,
+            )
 
         return CreateMessageResponse(
             messageId=message_id,

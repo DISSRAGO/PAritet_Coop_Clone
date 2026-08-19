@@ -1,0 +1,5 @@
+-- Baseline marker for existing HomoNet installations.
+--
+-- This migration deliberately does not alter application tables.
+-- After it is registered, all schema changes must use new append-only
+-- migration files in this directory.

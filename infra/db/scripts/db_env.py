@@ -13,8 +13,10 @@ def load_repository_env() -> None:
 
 
 def get_database_url(explicit_url: str | None = None) -> str:
+    if explicit_url:
+        return explicit_url
     load_repository_env()
-    database_url = explicit_url or os.getenv("DATABASE_DDL_URL", "").strip()
+    database_url = os.getenv("DATABASE_DDL_URL", "").strip()
     if not database_url:
         raise RuntimeError(
             "DATABASE_DDL_URL is required and must use the schema-owner role."

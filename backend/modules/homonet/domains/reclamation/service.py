@@ -27,6 +27,7 @@ from backend.modules.homonet.domains.reclamation.schemas import (
     PanelInboxResponse,
     PatchReclamationRequest,
     ReclamationDetailResponse,
+    ReclamationLevelItem,
     ReclamationListItem,
     ReclamationListResponse,
     StatusTransitionResponse,
@@ -216,6 +217,29 @@ class ReclamationService:
             async with conn.cursor() as cur:
                 await cur.execute(query, args)
                 return await cur.fetchall()
+
+    async def _resolve_profile_thanka_id(self, subject_id):
+        """
+        Находит профильную тханку субъекта:
+        thanka_type_id IS NULL AND title = display_name.
+        """
+        if not subject_id:
+            return None
+
+        row = await self._fetch_one(
+            """
+            SELECT t.thanka_id::text AS thanka_id
+            FROM homonet.thanka t
+            JOIN homonet.author a ON a.author_id = t.author_id
+            WHERE a.subject_id = %s
+              AND t.thanka_type_id IS NULL
+              AND t.title = a.display_name
+            ORDER BY t.created_at ASC
+            LIMIT 1
+            """,
+            subject_id,
+        )
+        return row["thanka_id"] if row else None
 
     async def _ensure_reclamation(self, reclamation_id: str) -> dict:
         row = await self._fetch_one(
@@ -796,6 +820,50 @@ class ReclamationService:
             reclamation_id,
         )
 
+        levels_raw = await self._fetch_all(
+            """
+            SELECT
+                rl.reclamation_id::text AS reclamation_id,
+                rl.level,
+                rl.claimant_subject_id::text AS claimant_subject_id,
+                cs.display_name AS claimant_display_name,
+                ca.login AS claimant_login,
+                rl.respondent_subject_id::text AS respondent_subject_id,
+                rs.display_name AS respondent_display_name,
+                ra.login AS respondent_login,
+                rl.created_at, rl.closed_at
+            FROM homonet.reclamation_level rl
+            LEFT JOIN homonet.subject cs ON cs.subject_id = rl.claimant_subject_id
+            LEFT JOIN homonet.subject rs ON rs.subject_id = rl.respondent_subject_id
+            LEFT JOIN homonet.auth_user ca ON ca.subject_id = rl.claimant_subject_id
+            LEFT JOIN homonet.auth_user ra ON ra.subject_id = rl.respondent_subject_id
+            WHERE rl.reclamation_id = %s
+            ORDER BY rl.level
+            """,
+            reclamation_id,
+        )
+
+        levels = []
+        for row in levels_raw:
+            claimant_thanka_id = await self._resolve_profile_thanka_id(row.get("claimant_subject_id"))
+            respondent_thanka_id = await self._resolve_profile_thanka_id(row.get("respondent_subject_id"))
+            levels.append(
+                ReclamationLevelItem(
+                    reclamationId=row["reclamation_id"],
+                    level=row["level"],
+                    claimantSubjectId=row.get("claimant_subject_id"),
+                    claimantDisplayName=row.get("claimant_display_name"),
+                    claimantLogin=row.get("claimant_login"),
+                    claimantThankaId=claimant_thanka_id,
+                    respondentSubjectId=row.get("respondent_subject_id"),
+                    respondentDisplayName=row.get("respondent_display_name"),
+                    respondentLogin=row.get("respondent_login"),
+                    respondentThankaId=respondent_thanka_id,
+                    createdAt=self._fmt(row.get("created_at")),
+                    closedAt=self._fmt(row.get("closed_at")),
+                )
+            )
+
         attachments = await self._fetch_all(
             """
             SELECT
@@ -887,6 +955,7 @@ class ReclamationService:
             attachments=ser(attachments),
             responses=ser(responses),
             events=ser(events),
+            levels=levels,
         )
 
     async def patch_reclamation(

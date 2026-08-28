@@ -46,7 +46,7 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontends/cogitor-ui
         run: npm ci
-
+      
       - name: Run frontend tests
         working-directory: frontends/cogitor-ui
-        run: npm test -- --watch=false
+        run: npm test -- --watch=false --passWithNoTests

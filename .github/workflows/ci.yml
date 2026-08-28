@@ -50,3 +50,21 @@ jobs:
       - name: Run frontend tests
         working-directory: frontends/cogitor-ui
         run: npm test -- --watch=false --passWithNoTests
+
+  deploy-dev:
+    needs: [ backend-tests, cogitor-ui-tests ]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy dev via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /srv/clone
+            git fetch origin main
+            git reset --hard origin/main
+            bash infra/scripts/start_cogiteka_hybrid.sh

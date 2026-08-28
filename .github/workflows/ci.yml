@@ -41,6 +41,7 @@ jobs:
         with:
           node-version: "18"
           cache: "npm"
+          cache-dependency-path: frontends/cogitor-ui/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: frontends/cogitor-ui

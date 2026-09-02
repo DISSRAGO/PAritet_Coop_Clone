@@ -33,6 +33,7 @@ import ReclamationApi from "../api/reclamation";
 import type {
   ReclamationStatus,
   ReclamationSummary,
+  ReclamationLevel,
 } from "../models/reclamation/Reclamation";
 import { Urls } from "../utils/urls";
 
@@ -251,7 +252,20 @@ function getApiBaseUrl(): string {
   return "/api";
 }
 
+function buildSubjectProfileUrl(subjectId?: string | null): string | null {
+  if (!subjectId) return null;
 
+  const origin =
+    typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "";
+
+  // При необходимости поправь путь под свой роутер админки:
+  // например, "/admin/users/" или "/profile/".
+  const path = `/navigator/${subjectId}`;
+
+  return origin ? `${origin}${path}` : path;
+}
 
 type ThankaUrlInfo = {
   customUrl?: string | null;
@@ -540,8 +554,151 @@ function buildActions(
   return actions;
 }
 
+interface ReclamationEscalationTimelineProps {
+  levels: ReclamationLevel[];
+  currentLevel?: number | null;
+}
 
+interface ReclamationEscalationTimelineProps {
+  levels: ReclamationLevel[];
+  currentLevel?: number | null;
+}
 
+const ReclamationEscalationTimeline: React.FC<ReclamationEscalationTimelineProps> = ({
+  levels,
+  currentLevel,
+}) => {
+  if (!Array.isArray(levels) || !levels.length) return null;
+
+  const current = typeof currentLevel === "number" ? currentLevel : null;
+  const lastLevel = levels[levels.length - 1]?.level ?? null;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <Title level={5} style={{ marginBottom: 8 }}>
+        Уровни эскалации
+      </Title>
+      <div style={{ maxHeight: "24vh", overflowY: "auto", paddingLeft: 8 }}>
+        {levels.map((lv) => {
+          const isCurrent = current !== null && lv.level === current;
+          const isLast = lastLevel !== null && lv.level === lastLevel;
+
+         const claimantProfileUrl = buildSubjectProfileUrl(
+          lv.claimantThankaId || lv.claimantSubjectId
+        );
+
+        const respondentProfileUrl = buildSubjectProfileUrl(
+          lv.respondentThankaId || lv.respondentSubjectId
+        );
+
+          const claimantLabel = lv.claimantLogin || `Заявитель уровня ${lv.level}`;
+          const respondentLabel = lv.respondentLogin || `Ответчик уровня ${lv.level}`;
+
+          return (
+            <div
+              key={`${lv.level}-${lv.claimantSubjectId || ""}-${lv.respondentSubjectId || ""}`}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                marginBottom: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}
+              >
+                <div
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: isCurrent ? "#1677ff" : "#d9d9d9",
+                  }}
+                />
+                {!isLast && (
+                  <div
+                    style={{
+                      flex: 1,
+                      width: 2,
+                      background: "#f0f0f0",
+                      marginTop: 2,
+                    }}
+                  />
+                )}
+              </div>
+              <div
+                style={{
+                  flex: 1,
+                  marginLeft: 8,
+                  padding: 8,
+                  borderRadius: 8,
+                  background: isCurrent ? "#e6f4ff" : "#fafafa",
+                  border: `1px solid ${isCurrent ? "#91caff" : "#f0f0f0"}`,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    marginBottom: 4,
+                  }}
+                >
+                  Уровень {lv.level}
+                  {isCurrent ? " · текущий" : ""}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  <div>
+                    Заявитель:{" "}
+                    {claimantProfileUrl ? (
+                      <a
+                        href={claimantProfileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {claimantLabel}
+                      </a>
+                    ) : (
+                      claimantLabel
+                    )}
+                  </div>
+                  <div>
+                    Исполнитель:{" "}
+                    {respondentProfileUrl ? (
+                      <a
+                        href={respondentProfileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {respondentLabel}
+                      </a>
+                    ) : (
+                      respondentLabel
+                    )}
+                  </div>
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#8c8c8c",
+                    marginTop: 4,
+                  }}
+                >
+                  Создан: {formatDate(lv.createdAt || undefined)}
+                  {lv.closedAt &&
+                    ` · Закрыт: ${formatDate(lv.closedAt || undefined)}`}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 const ReclamationPanelPage: React.FC = () => {
   const dispatch = useDispatch() as any;
   const reclamationState = useSelector((state: any) => state.reclamation || {});
@@ -600,6 +757,7 @@ const ReclamationPanelPage: React.FC = () => {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLevels, setChatLevels] = useState<ReclamationLevel[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatItem, setChatItem] = useState<ReclamationSummary | null>(null);
   const [chatSending, setChatSending] = useState(false);
@@ -725,9 +883,8 @@ const ReclamationPanelPage: React.FC = () => {
     setChatLoading(true);
     setChatError(null);
     setChatMessages([]);
+    setChatLevels([]);
     setChatInput("");
-
-
 
     try {
       const resp = await ReclamationApi.getById(item.reclamationId);
@@ -735,7 +892,8 @@ const ReclamationPanelPage: React.FC = () => {
       const messages = Array.isArray(data?.messages) ? data.messages : [];
       setChatMessages(messages);
 
-
+      const levels = Array.isArray(data?.levels) ? data.levels : [];
+      setChatLevels(levels);
 
       if (subjectId && (tab === "inbox" || !!item.hasUnread || !!item.unreadCount)) {
         try {
@@ -750,7 +908,6 @@ const ReclamationPanelPage: React.FC = () => {
       setChatLoading(false);
     }
   };
-
 
 
   const sendChatMessage = async () => {
@@ -1144,6 +1301,11 @@ const ReclamationPanelPage: React.FC = () => {
           <Alert type="error" message={chatError} showIcon />
         ) : (
           <>
+            <ReclamationEscalationTimeline
+              levels={chatLevels}
+              currentLevel={chatItem?.escalationLevel ?? null}
+            />
+
             <div
               style={{
                 display: "flex",
@@ -1158,13 +1320,9 @@ const ReclamationPanelPage: React.FC = () => {
                 <Text type="secondary">Сообщений пока нет.</Text>
               )}
 
-
-
               {chatMessages.map((m) => {
                 const isMine = m.authorSubjectId === subjectId;
                 const isSystem = m.messageType === "system_note";
-
-
 
                 return (
                   <div
@@ -1192,8 +1350,6 @@ const ReclamationPanelPage: React.FC = () => {
                 );
               })}
             </div>
-
-
 
             <Space direction="vertical" style={{ width: "100%" }}>
               <TextArea

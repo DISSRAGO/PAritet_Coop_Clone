@@ -155,9 +155,12 @@ function normalizeFullResponse(json: any): ReclamationFullResponse {
       decisions: Array.isArray(data?.decisions) ? data.decisions : [],
       escalations: Array.isArray(data?.escalations) ? data.escalations : [],
       events: Array.isArray(data?.events) ? data.events : [],
+      levels: Array.isArray(data?.levels) ? data.levels : [],
     },
   };
 }
+
+
 
 async function handleJsonResponse(response: Response): Promise<any> {
   const rawText = await response.text().catch(() => "");

@@ -5,3 +5,6 @@ PyJWT
 pillow
 bcrypt
 psycopg[binary]
+pytest>=8.0
+pytest-asyncio>=0.23   # если есть асинхронные ручки, что у нас есть
+pytest-cov>=6.0   

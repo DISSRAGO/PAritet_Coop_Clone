@@ -4,6 +4,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from uuid import UUID
+from typing import Optional
 
 class Meta(BaseModel):
     total: int
@@ -197,6 +199,21 @@ class PanelInboxResponse(BaseModel):
     meta: Meta
 
 
+class ReclamationLevelItem(BaseModel):
+    reclamationId: str
+    level: int
+    claimantSubjectId: Optional[str] = None
+    claimantDisplayName: Optional[str] = None
+    claimantLogin: Optional[str] = None
+    respondentSubjectId: Optional[str] = None
+    respondentDisplayName: Optional[str] = None
+    respondentLogin: Optional[str] = None
+    createdAt: Optional[str] = None
+    closedAt: Optional[str] = None
+    claimantThankaId: Optional[UUID] = None
+    respondentThankaId: Optional[UUID] = None
+
+    
 class ReclamationDetailResponse(BaseModel):
     reclamationId: str
     reclamationType: str
@@ -225,3 +242,4 @@ class ReclamationDetailResponse(BaseModel):
     attachments: list[dict] = []
     responses: list[dict] = []
     events: list[dict] = []
+    levels: list[ReclamationLevelItem] = []

@@ -193,6 +193,7 @@ class LocalCogiAdapter:
                            t.status           AS status,
                            t.author_id::text  AS author_id,
                            a.subject_id::text AS author_subject_id,
+                           a.display_name AS author_name,
                            COALESCE(co.current_content, '{}'::jsonb) AS content
                     FROM thanka t
                     LEFT JOIN author a ON a.author_id = t.author_id
@@ -213,6 +214,7 @@ class LocalCogiAdapter:
                            t.status           AS status,
                            t.author_id::text  AS author_id,
                            a.subject_id::text AS author_subject_id,
+                           a.display_name AS author_name,
                            COALESCE(co.current_content, '{}'::jsonb) AS content
                     FROM thanka t
                     LEFT JOIN author a ON a.author_id = t.author_id
@@ -273,6 +275,8 @@ class LocalCogiAdapter:
                 # родитель исчез (удалён) — обнуляем, чтобы не вести на битую ссылку
                 parent_id = ""
 
+        author_name = str((row or {}).get("author_name") or "").strip()
+
         thanka_obj = {
             "Id": (row["id"] if row else thanka_id) or "",
             "Name": (row["name"] if row else (login or "КОГИТЕКА")),
@@ -285,7 +289,7 @@ class LocalCogiAdapter:
             "ParentCustomUrl": parent_custom_url,
             "Author": (row["author_id"] if row else author_id) or author_id,
             "AuthorSubjectId": author_subject_id,
-            "AuthorName": login,
+            "AuthorName": author_name,
             "CustomURL": custom_url,
         }
 

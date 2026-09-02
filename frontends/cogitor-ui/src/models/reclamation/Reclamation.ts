@@ -323,6 +323,21 @@ export interface ReclamationEvent {
   createdAt: string;
 }
 
+export interface ReclamationLevel {
+  reclamationId: string;
+  level: number;
+  claimantSubjectId?: string | null;
+  claimantDisplayName?: string | null;
+  claimantLogin?: string | null;
+  respondentSubjectId?: string | null;
+  respondentDisplayName?: string | null;
+  respondentLogin?: string | null;
+  createdAt?: string | null;
+  closedAt?: string | null;
+  claimantThankaId?: string | null;
+  respondentThankaId?: string | null;
+}
+
 export interface ReclamationFullData extends ReclamationCore {
   participants: ReclamationParticipant[];
   messages: ReclamationMessage[];
@@ -331,6 +346,7 @@ export interface ReclamationFullData extends ReclamationCore {
   decisions: ReclamationDecision[];
   escalations: ReclamationEscalation[];
   events?: ReclamationEvent[];
+  levels?: ReclamationLevel[];
 }
 
 export interface ReclamationFullResponse {

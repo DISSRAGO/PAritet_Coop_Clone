@@ -69,10 +69,9 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
+          port: 55222
           script: |
             cd /srv/clone
             git fetch origin main
-            git reset --hard origin/main
-            bash infra/scripts/start_cogiteka_hybrid.sh
             git reset --hard origin/main
             bash infra/scripts/start_cogiteka_hybrid.sh
